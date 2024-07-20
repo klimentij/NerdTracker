@@ -57,7 +57,6 @@ export default {
       <body>
         <div id="dateRange">
           <input type="text" id="dateRangePicker" placeholder="Select date range">
-          <button id="updateMap">Update Map</button>
         </div>
         <div id="map"></div>
         <script>
@@ -194,7 +193,6 @@ export default {
               if (selectedDates.length === 2) {
                 startDate = selectedDates[0];
                 endDate = selectedDates[1];
-                // Automatically update the map when dates are selected
                 const filteredLocations = filterLocations(startDate, endDate);
                 updateMap(filteredLocations);
               }
