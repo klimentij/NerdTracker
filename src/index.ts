@@ -31,6 +31,7 @@ export default {
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+        <script src="https://unpkg.com/leaflet-polylinedecorator/dist/leaflet.polylineDecorator.js"></script>
         <style>
           body { margin: 0; padding: 0; }
           #map { height: 100vh; width: 100%; }
@@ -51,6 +52,12 @@ export default {
             padding: 10px;
             border-radius: 5px;
             box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+          }
+          .leaflet-polylinedecorator-arrowhead {
+            fill: none;
+            stroke: red;
+            stroke-width: 2;
+            opacity: 0.6;
           }
         </style>
       </head>
@@ -102,17 +109,59 @@ export default {
           }
 
           let currentMarker;
+          let statsControl; // Declare this at the top level of your script
 
           function updateMap(filteredLocations) {
             map.eachLayer(layer => {
-              if (layer instanceof L.Circle || layer instanceof L.Polyline) {
+              if (layer instanceof L.Circle || layer instanceof L.Polyline || layer instanceof L.LayerGroup) {
                 map.removeLayer(layer);
               }
             });
 
             if (filteredLocations.length > 0) {
               const trackPoints = filteredLocations.map(loc => [loc.lat, loc.lon]);
-              L.polyline(trackPoints, {color: 'red', opacity: 0.6}).addTo(map);
+              const polyline = L.polyline(trackPoints, {color: 'red', opacity: 0.6}).addTo(map);
+
+              // Add arrow decorations with matching opacity
+              const arrowDecorator = L.polylineDecorator(polyline, {
+                patterns: [
+                  {
+                    offset: 0,
+                    repeat: 50,
+                    symbol: L.Symbol.arrowHead({
+                      pixelSize: 4,
+                      polygon: false,
+                      pathOptions: {
+                        stroke: true,
+                        weight: 2,
+                        color: 'red',
+                        opacity: 0.6
+                      }
+                    })
+                  }
+                ]
+              }).addTo(map);
+
+              // Group polyline and arrows for easy removal
+              const trackGroup = L.layerGroup([polyline, arrowDecorator]).addTo(map);
+
+              // Calculate stats
+              let totalDistance = 0;
+              let totalSpeed = 0;
+              let minAlt = Infinity;
+              let maxAlt = -Infinity;
+
+              for (let i = 1; i < filteredLocations.length; i++) {
+                const prev = filteredLocations[i - 1];
+                const curr = filteredLocations[i];
+                totalDistance += calculateDistance(prev.lat, prev.lon, curr.lat, curr.lon);
+                totalSpeed += curr.vel;
+                minAlt = Math.min(minAlt, curr.alt);
+                maxAlt = Math.max(maxAlt, curr.alt);
+              }
+
+              const avgSpeed = totalSpeed / filteredLocations.length;
+              const numLocations = filteredLocations.length;
 
               filteredLocations.forEach(loc => {
                 L.circle([loc.lat, loc.lon], {
@@ -139,6 +188,31 @@ export default {
                   direction: 'top'
                 });
               });
+
+              // Update or create stats control
+              if (statsControl) {
+                map.removeControl(statsControl);
+              }
+              statsControl = L.control({position: 'bottomleft'});
+              statsControl.onAdd = function(map) {
+                const div = L.DomUtil.create('div', 'info legend');
+                div.innerHTML = 
+                  '<h4>Track Statistics</h4>' +
+                  '<p>Total Distance: ' + totalDistance.toFixed(2) + ' km</p>' +
+                  '<p>Average Speed: ' + avgSpeed.toFixed(2) + ' km/h</p>' +
+                  '<p>Number of Locations: ' + numLocations + '</p>' +
+                  '<p>Min Altitude: ' + minAlt.toFixed(2) + ' m</p>' +
+                  '<p>Max Altitude: ' + maxAlt.toFixed(2) + ' m</p>';
+                div.style.backgroundColor = 'white';
+                div.style.padding = '10px';
+                div.style.borderRadius = '5px';
+                div.style.boxShadow = '0 1px 5px rgba(0,0,0,0.65)';
+                div.style.maxWidth = '200px'; // Limit width for mobile devices
+                div.style.overflowY = 'auto'; // Allow scrolling if content is too long
+                div.style.maxHeight = '30vh'; // Limit height to 30% of viewport height
+                return div;
+              };
+              statsControl.addTo(map);
 
               map.fitBounds(trackPoints);
             }
@@ -177,18 +251,32 @@ export default {
             });
           }
 
-          // Set default date range to today
+          // Helper function to calculate distance between two points
+          function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Radius of the Earth in km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+          }
+
+          // Set default date range to last 3 days (including today)
           const now = new Date();
           now.setHours(23, 59, 59, 999); // Set to end of today
-          const startOfToday = new Date(now);
-          startOfToday.setHours(0, 0, 0, 0); // Set to start of today
-          let startDate = startOfToday;
+          const twoDaysAgo = new Date(now);
+          twoDaysAgo.setDate(now.getDate() - 2); // Go back 2 days
+          twoDaysAgo.setHours(0, 0, 0, 0); // Set to start of the day
+          let startDate = twoDaysAgo;
           let endDate = now;
 
           const dateRangePicker = flatpickr("#dateRangePicker", {
             mode: "range",
             defaultDate: [startDate, endDate],
             maxDate: "today",
+            dateFormat: "Y-m-d",
             onChange: function(selectedDates) {
               if (selectedDates.length === 2) {
                 startDate = selectedDates[0];
@@ -199,8 +287,11 @@ export default {
             }
           });
 
-          // Initial map update with default date range
-          const initialFilteredLocations = filterLocations(startDate, endDate);
+          // Manually trigger the change event to update the input field
+          dateRangePicker.setDate([startDate, endDate]);
+
+          // Initial map update with default date range (last 3 days including today)
+          const initialFilteredLocations = filterLocations(startDate, endDate).reverse();
           updateMap(initialFilteredLocations);
         </script>
       </body>
