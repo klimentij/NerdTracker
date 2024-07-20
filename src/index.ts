@@ -25,11 +25,21 @@ export default {
     <html>
       <head>
         <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
         <title>Location Tracker</title>
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-        <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
         <style>
+          body { margin: 0; padding: 0; }
           #map { height: 100vh; width: 100%; }
+          .leaflet-popup-content {
+            font-size: 14px;
+            line-height: 1.6;
+          }
+          .leaflet-tooltip {
+            font-size: 12px;
+            line-height: 1.4;
+          }
         </style>
       </head>
       <body>
@@ -37,7 +47,13 @@ export default {
         <script>
           const locations = ${JSON.stringify(data)};
           
-          const map = L.map('map').setView([0, 0], 2);
+          const map = L.map('map', {
+            zoomControl: false  // Disable default zoom control
+          }).setView([0, 0], 2);
+
+          L.control.zoom({
+            position: 'bottomright'  // Move zoom control to bottom right
+          }).addTo(map);
 
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -60,11 +76,9 @@ export default {
           }
 
           if (locations.length > 0) {
-            // Create a polyline for the track
             const trackPoints = locations.map(loc => [loc.lat, loc.lon]);
             L.polyline(trackPoints, {color: 'red', opacity: 0.6}).addTo(map);
 
-            // Add circles for each point
             locations.forEach(loc => {
               L.circle([loc.lat, loc.lon], {
                 radius: 4,
@@ -91,27 +105,34 @@ export default {
               });
             });
 
-            // Add marker for the most recent location
             const latest = locations[0];
-            L.marker([latest.lat, latest.lon])
-              .addTo(map)
-              .bindPopup(\`
-                <b>Current location (\${getTimeSince(latest.tst)})</b><br>
-                Time: \${formatTimestamp(latest.tst)}<br>
-                Coordinates: \${latest.lat}, \${latest.lon}<br>
-                Accuracy: \${latest.acc} meters<br>
-                Altitude: \${latest.alt} meters<br>
-                Velocity: \${latest.vel} km/h<br>
-                Vertical Accuracy: \${latest.vac} meters<br>
-                Battery: \${latest.batt}%<br>
-                SSID: \${latest.SSID || 'N/A'}<br>
-                Tag: \${latest.tag || 'N/A'}<br>
-                Topic: \${latest.topic || 'N/A'}<br>
-                TID: \${latest.tid || 'N/A'}
-              \`)
-              .openPopup();
+            const currentMarker = L.marker([latest.lat, latest.lon]).addTo(map);
+            
+            const popupContent = \`
+              <b>Current location (\${getTimeSince(latest.tst)})</b><br>
+              Time: \${formatTimestamp(latest.tst)}<br>
+              Coordinates: \${latest.lat}, \${latest.lon}<br>
+              Accuracy: \${latest.acc} meters<br>
+              Altitude: \${latest.alt} meters<br>
+              Velocity: \${latest.vel} km/h<br>
+              Vertical Accuracy: \${latest.vac} meters<br>
+              Battery: \${latest.batt}%<br>
+              SSID: \${latest.SSID || 'N/A'}<br>
+              Tag: \${latest.tag || 'N/A'}<br>
+              Topic: \${latest.topic || 'N/A'}<br>
+              TID: \${latest.tid || 'N/A'}
+            \`;
 
-            // Fit the map to show all points
+            currentMarker.bindPopup(popupContent);
+            
+            setTimeout(() => {
+              currentMarker.openPopup();
+            }, 100);
+
+            currentMarker.on('click', function() {
+              this.openPopup();
+            });
+
             map.fitBounds(trackPoints);
           }
         </script>
