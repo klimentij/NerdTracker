@@ -6,12 +6,12 @@ export interface Env {
 }
 
 export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY)
 
     const { data, error } = await supabase
       .from('locations')
-      .select('lat,lon,acc,alt,vel,vac,SSID,tag,topic,tid,tst')
+      .select('lat,lon,acc,alt,vel,batt,SSID,tag,topic,tid,tst')
       .order('tst', { ascending: false })
       .limit(10000)
 
@@ -178,10 +178,9 @@ export default {
                   Coordinates: \${loc.lat}, \${loc.lon}<br>
                   Accuracy: \${loc.acc} meters<br>
                   Altitude: \${loc.alt} meters<br>
-                  Velocity: \${loc.vel} km/h<br>
-                  Vertical Accuracy: \${loc.vac} meters<br>
+                  Velocity: \${loc.vel !== null ? loc.vel : 0} km/h<br>
                   Battery: \${loc.batt}%<br>
-                  SSID: \${loc.SSID || 'N/A'}<br>
+                  Wi-Fi: \${loc.SSID ? loc.SSID : 'Not connected'}<br>
                   Tag: \${loc.tag || 'N/A'}<br>
                   Topic: \${loc.topic || 'N/A'}<br>
                   TID: \${loc.tid || 'N/A'}
@@ -227,20 +226,17 @@ export default {
               currentMarker.setLatLng([latest.lat, latest.lon]);
             }
             
-            const popupContent = \`
-              <b>Current location (\${getTimeSince(latest.tst)})</b><br>
-              Time: \${formatTimestamp(latest.tst)}<br>
-              Coordinates: \${latest.lat}, \${latest.lon}<br>
-              Accuracy: \${latest.acc} meters<br>
-              Altitude: \${latest.alt} meters<br>
-              Velocity: \${latest.vel} km/h<br>
-              Vertical Accuracy: \${latest.vac} meters<br>
-              Battery: \${latest.batt}%<br>
-              SSID: \${latest.SSID || 'N/A'}<br>
-              Tag: \${latest.tag || 'N/A'}<br>
-              Topic: \${latest.topic || 'N/A'}<br>
-              TID: \${latest.tid || 'N/A'}
-            \`;
+            const popupContent = '<b>Current location (' + getTimeSince(latest.tst) + ')</b><br>' +
+              'Time: ' + formatTimestamp(latest.tst) + '<br>' +
+              'Coordinates: ' + latest.lat + ', ' + latest.lon + '<br>' +
+              'Accuracy: ' + latest.acc + ' meters<br>' +
+              'Altitude: ' + latest.alt + ' meters<br>' +
+              'Velocity: ' + (latest.vel !== null ? latest.vel : 0) + ' km/h<br>' +
+              'Battery: ' + latest.batt + '%<br>' +
+              'Wi-Fi: ' + (latest.SSID ? latest.SSID : 'Not connected') + '<br>' +
+              'Tag: ' + (latest.tag || 'N/A') + '<br>' +
+              'Topic: ' + (latest.topic || 'N/A') + '<br>' +
+              'TID: ' + (latest.tid || 'N/A');
 
             currentMarker.bindPopup(popupContent);
             
@@ -305,4 +301,4 @@ export default {
       },
     });
   },
-};
+} as const;
