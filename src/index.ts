@@ -11,7 +11,7 @@ export default {
 
     const { data, error } = await supabase
       .from('locations')
-      .select('lat,lon,acc,alt,vel,vac,batt,SSID,tag,topic,tid,tst')
+      .select('lat,lon,acc,alt,vel,vac,SSID,tag,topic,tid,tst')
       .order('tst', { ascending: false })
       .limit(10000)
 
@@ -119,17 +119,19 @@ export default {
             });
 
             if (filteredLocations.length > 0) {
-              const trackPoints = filteredLocations.map(loc => [loc.lat, loc.lon]);
+              // Sort locations by timestamp in ascending order
+              const sortedLocations = filteredLocations.sort((a, b) => a.tst - b.tst);
+              const trackPoints = sortedLocations.map(loc => [loc.lat, loc.lon]);
               const polyline = L.polyline(trackPoints, {color: 'red', opacity: 0.6}).addTo(map);
 
-              // Add arrow decorations with matching opacity
+              // Add arrow decorations with matching opacity and correct direction
               const arrowDecorator = L.polylineDecorator(polyline, {
                 patterns: [
                   {
-                    offset: 0,
+                    offset: 25,
                     repeat: 50,
                     symbol: L.Symbol.arrowHead({
-                      pixelSize: 4,
+                      pixelSize: 5,
                       polygon: false,
                       pathOptions: {
                         stroke: true,
@@ -263,13 +265,12 @@ export default {
             return R * c;
           }
 
-          // Set default date range to last 3 days (including today)
+          // Set default date range to today
           const now = new Date();
           now.setHours(23, 59, 59, 999); // Set to end of today
-          const twoDaysAgo = new Date(now);
-          twoDaysAgo.setDate(now.getDate() - 2); // Go back 2 days
-          twoDaysAgo.setHours(0, 0, 0, 0); // Set to start of the day
-          let startDate = twoDaysAgo;
+          const startOfToday = new Date(now);
+          startOfToday.setHours(0, 0, 0, 0); // Set to start of today
+          let startDate = startOfToday;
           let endDate = now;
 
           const dateRangePicker = flatpickr("#dateRangePicker", {
@@ -290,7 +291,7 @@ export default {
           // Manually trigger the change event to update the input field
           dateRangePicker.setDate([startDate, endDate]);
 
-          // Initial map update with default date range (last 3 days including today)
+          // Initial map update with default date range (today only)
           const initialFilteredLocations = filterLocations(startDate, endDate).reverse();
           updateMap(initialFilteredLocations);
         </script>
