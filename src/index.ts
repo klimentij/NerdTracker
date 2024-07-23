@@ -10,8 +10,21 @@ export default {
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY)
 
     const url = new URL(request.url);
-    const startDate = url.searchParams.get('start');
-    const endDate = url.searchParams.get('end');
+    let startDate = url.searchParams.get('start');
+    let endDate = url.searchParams.get('end');
+
+    // Set default dates if not provided
+    if (!startDate || !endDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      startDate = today.toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+      
+      // Update URL with default dates
+      url.searchParams.set('start', startDate);
+      url.searchParams.set('end', endDate);
+      return Response.redirect(url.toString(), 302);
+    }
 
     let allData = [];
     let error = null;
@@ -70,6 +83,16 @@ export default {
     if (error) {
       console.error('Error fetching data from Supabase:', error)
       return new Response('Error fetching data', { status: 500 })
+    }
+
+    // Check if it's an AJAX request
+    const isAjax = request.headers.get('X-Requested-With') === 'XMLHttpRequest';
+
+    if (isAjax) {
+      // Return JSON data for AJAX requests
+      return new Response(JSON.stringify(allData), {
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
 
     const html = `
@@ -164,7 +187,7 @@ export default {
           }
 
           function updateMap(filteredLocations) {
-            console.log('Updating map with', filteredLocations.length, 'locations');
+            console.log('updateMap called with', filteredLocations.length, 'locations');
 
             // Clear existing layers
             map.eachLayer(layer => {
@@ -360,21 +383,16 @@ export default {
             updateURLParams(start, end);
             console.log('Fetching locations for range:', start, 'to', end);
             try {
-              const response = await fetch(\`?start=\${start.toISOString().split('T')[0]}&end=\${end.toISOString().split('T')[0]}\`);
-              if (response.ok) {
-                const html = await response.text();
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                const scriptContent = doc.querySelector('script').textContent;
-                const match = scriptContent.match(/let locations = (.*?);/);
-                if (match) {
-                  locations = JSON.parse(match[1]);
-                  console.log('Fetched locations:', locations);
-                  updateMap(locations);
-                } else {
-                  console.error('Failed to parse locations data');
-                  updateMap([]);
+              const response = await fetch(\`?start=\${start.toISOString().split('T')[0]}&end=\${end.toISOString().split('T')[0]}\`, {
+                headers: {
+                  'X-Requested-With': 'XMLHttpRequest'
                 }
+              });
+              if (response.ok) {
+                const newLocations = await response.json();
+                console.log('Fetched locations:', newLocations);
+                locations = newLocations; // Update the global locations variable
+                updateMap(newLocations);
               } else {
                 console.error('Failed to fetch locations, status:', response.status);
                 updateMap([]);
@@ -385,25 +403,20 @@ export default {
             }
           }
 
-          const now = new Date();
-          now.setHours(23, 59, 59, 999);
-          const startOfToday = new Date(now);
-          startOfToday.setHours(0, 0, 0, 0);
-          let startDate = startOfToday;
-          let endDate = now;
-
           const urlParams = new URLSearchParams(window.location.search);
           const urlStartDate = urlParams.get('start');
           const urlEndDate = urlParams.get('end');
+          
+          let startDate, endDate;
           if (urlStartDate && urlEndDate) {
-            const parsedStartDate = new Date(urlStartDate);
-            const parsedEndDate = new Date(urlEndDate);
-            if (!isNaN(parsedStartDate.getTime()) && !isNaN(parsedEndDate.getTime()) && parsedEndDate <= now) {
-              startDate = parsedStartDate;
-              endDate = parsedEndDate;
-            } else {
-              console.warn('Invalid date range in URL. Using default (today).');
-            }
+            startDate = new Date(urlStartDate);
+            endDate = new Date(urlEndDate);
+            endDate.setHours(23, 59, 59, 999);
+          } else {
+            startDate = new Date();
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date();
+            endDate.setHours(23, 59, 59, 999);
           }
 
           const dateRangePicker = flatpickr("#dateRangePicker", {
@@ -415,14 +428,31 @@ export default {
               if (selectedDates.length === 2) {
                 startDate = selectedDates[0];
                 endDate = selectedDates[1];
+                endDate.setHours(23, 59, 59, 999); // Set to end of day
                 fetchLocations(startDate, endDate);
               }
             }
           });
 
-          dateRangePicker.setDate([startDate, endDate]);
-          console.log('Invoking initial updateMap');
-          updateMap(locations);
+          console.log('Initial locations:', locations);
+          if (locations && locations.length > 0) {
+            console.log('Invoking initial updateMap');
+            updateMap(locations);
+          } else {
+            console.log('No initial locations, fetching...');
+            fetchLocations(startDate, endDate);
+          }
+
+          // Add this line to log any changes to the locations variable
+          Object.defineProperty(window, 'locations', {
+            set: function(newValue) {
+              console.log('locations updated:', newValue);
+              this._locations = newValue;
+            },
+            get: function() {
+              return this._locations;
+            }
+          });
         </script>
       </body>
     </html>
