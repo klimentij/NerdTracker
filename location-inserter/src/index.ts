@@ -1,5 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
+// ===== CONFIGURATION =====
+// Minimum distance (in meters) required between consecutive locations
+const MIN_DISTANCE_THRESHOLD = 100;
+// ===== END CONFIGURATION =====
+
 interface Env {
   AUTH_USER: string;
   AUTH_PASS: string;
@@ -27,10 +32,6 @@ export default {
 			// Parse the JSON body
 			const body = await request.json();
 			
-			// Console log the prettified JSON body
-			console.log('Received JSON body:');
-			console.log(JSON.stringify(body, null, 2));
-			
 			// Initialize Supabase client
 			const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
 
@@ -54,9 +55,9 @@ export default {
 				console.log(`Distance from last location: ${distanceInMeters} m`);
 
 				// Check distance
-				if (distanceInMeters < 100) {
-					console.log('Skipping insertion: Distance < 100m');
-					return new Response('Skipping insertion: Distance < 100m', { status: 200 });
+				if (distanceInMeters < MIN_DISTANCE_THRESHOLD) {
+					console.log(`Skipping insertion: Distance < ${MIN_DISTANCE_THRESHOLD}m`);
+					return new Response(`Skipping insertion: Distance < ${MIN_DISTANCE_THRESHOLD}m`, { status: 200 });
 				}
 
 				// Check SSID only when connection type is 'w'
@@ -77,7 +78,7 @@ export default {
 				return new Response('Error inserting data', { status: 500 });
 			}
 
-			console.log('Data inserted successfully:', data);
+			console.log('Data inserted successfully');
 			return new Response('Data inserted successfully', { status: 200 });
 		} catch (error) {
 			// If there's an error parsing the JSON, return a 400 Bad Request
