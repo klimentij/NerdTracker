@@ -409,8 +409,8 @@ export default {
           
           let startDate, endDate;
           if (urlStartDate && urlEndDate) {
-            startDate = new Date(urlStartDate);
-            endDate = new Date(urlEndDate);
+            startDate = adjustForTimezone(new Date(urlStartDate));
+            endDate = adjustForTimezone(new Date(urlEndDate));
             endDate.setHours(23, 59, 59, 999);
           } else {
             startDate = new Date();
@@ -422,7 +422,6 @@ export default {
           const dateRangePicker = flatpickr("#dateRangePicker", {
             mode: "range",
             defaultDate: [startDate, endDate],
-            maxDate: "today",
             dateFormat: "Y-m-d",
             onChange: function(selectedDates) {
               if (selectedDates.length === 2) {
@@ -433,6 +432,10 @@ export default {
               }
             }
           });
+
+          function adjustForTimezone(date) {
+            return new Date(date.getTime() + date.getTimezoneOffset() * 60000);
+          }
 
           console.log('Initial locations:', locations);
           if (locations && locations.length > 0) {
