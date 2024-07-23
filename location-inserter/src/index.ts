@@ -1,6 +1,10 @@
+import { createClient } from '@supabase/supabase-js'
+
 interface Env {
   AUTH_USER: string;
   AUTH_PASS: string;
+  SUPABASE_URL: string;
+  SUPABASE_KEY: string;
 }
 
 export default {
@@ -23,17 +27,25 @@ export default {
 			// Parse the JSON body
 			const body = await request.json();
 			
-			// Convert the body back to a formatted JSON string
-			const formattedBody = JSON.stringify(body, null, 2);
-			
 			// Console log the prettified JSON body
 			console.log('Received JSON body:');
-			console.log(formattedBody);
+			console.log(JSON.stringify(body, null, 2));
 			
-			// Return the formatted JSON body as the response
-			return new Response(formattedBody, {
-				headers: { 'Content-Type': 'application/json' },
-			});
+			// Initialize Supabase client
+			const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
+
+			// Insert the data into the locations table
+			const { data, error } = await supabase
+				.from('locations')
+				.insert(body);
+
+			if (error) {
+				console.error('Error inserting data:', error);
+				return new Response('Error inserting data', { status: 500 });
+			}
+
+			console.log('Data inserted successfully:', data);
+			return new Response('Data inserted successfully', { status: 200 });
 		} catch (error) {
 			// If there's an error parsing the JSON, return a 400 Bad Request
 			return new Response('Invalid JSON', { status: 400 });
