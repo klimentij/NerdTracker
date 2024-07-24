@@ -457,13 +457,13 @@ export default {
           
           let startDate, endDate;
           if (urlStartDate && urlEndDate) {
-            startDate = new Date(urlStartDate);
-            endDate = new Date(urlEndDate);
+            startDate = luxon.DateTime.fromISO(urlStartDate).toJSDate();
+            endDate = luxon.DateTime.fromISO(urlEndDate).toJSDate();
           } else {
-            startDate = new Date();
-            startDate.setHours(0, 0, 0, 0);
-            endDate = new Date();
-            endDate.setHours(23, 59, 59);
+            // Set start to 00:00 and end to 23:59 of the current day
+            const now = luxon.DateTime.now().setZone(userTimezone);
+            startDate = now.startOf('day').toJSDate();
+            endDate = now.endOf('day').toJSDate();
           }
 
           const startDatePicker = flatpickr("#startDatePicker", {
@@ -491,6 +491,10 @@ export default {
               }
             }
           });
+
+          // Ensure the date pickers are updated with the correct initial values
+          startDatePicker.setDate(startDate, true);
+          endDatePicker.setDate(endDate, true);
 
           console.log('Initial locations:', locations);
           if (locations && locations.length > 0) {
