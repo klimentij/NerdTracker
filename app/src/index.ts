@@ -145,22 +145,9 @@ export default {
             stroke-width: 2;
             opacity: 0.6;
           }
-          #logoutButton {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 1000;
-            padding: 5px 10px;
-            background-color: #f44336;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-          }
         </style>
       </head>
       <body>
-        <button id="logoutButton" onclick="logout()">Logout</button>
         <div id="dateRange">
           <input type="text" id="dateRangePicker" placeholder="Select date range">
         </div>
@@ -219,6 +206,12 @@ export default {
                 map.removeLayer(layer);
               }
             });
+
+            // Remove the "No data available" message if it exists
+            const noDataMessageContainer = document.querySelector('.no-data-message');
+            if (noDataMessageContainer) {
+              noDataMessageContainer.remove();
+            }
 
             if (filteredLocations.length > 0) {
               console.log('First location:', filteredLocations[0]);
@@ -480,11 +473,6 @@ export default {
               return this._locations;
             }
           });
-
-          function logout() {
-            document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-            window.location.reload();
-          }
         </script>
       </body>
     </html>
@@ -521,53 +509,26 @@ const loginHtml = `
   <head>
     <meta charset="UTF-8">
     <title>Login</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        margin: 0;
-        background-color: #f0f0f0;
-      }
-      form {
-        background-color: white;
-        padding: 20px;
-        border-radius: 5px;
-        box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      }
-      input {
-        display: block;
-        margin: 10px 0;
-        padding: 5px;
-        width: 200px;
-      }
-      button {
-        background-color: #4CAF50;
-        color: white;
-        padding: 10px 15px;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-      }
-    </style>
   </head>
   <body>
-    <form id="loginForm">
-      <input type="text" id="username" placeholder="Username" required>
-      <input type="password" id="password" placeholder="Password" required>
-      <button type="submit">Login</button>
-    </form>
     <script>
-      document.getElementById('loginForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
-        const encodedCredentials = btoa(username + ':' + password);
-        document.cookie = 'auth=Basic ' + encodedCredentials + '; path=/';
-        window.location.reload();
-      });
+      // Trigger the browser's built-in login prompt
+      function showLoginPrompt() {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', window.location.href, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) {
+            if (xhr.status === 200) {
+              window.location.reload();
+            } else {
+              showLoginPrompt();
+            }
+          }
+        };
+        xhr.send();
+      }
+      showLoginPrompt();
     </script>
   </body>
 </html>
