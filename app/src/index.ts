@@ -139,6 +139,16 @@ export default {
             border-radius: 5px;
             box-shadow: 0 1px 5px rgba(0,0,0,0.65);
           }
+          #noDataWarning {
+            color: #856404;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 5px;
+            padding: 5px 10px;
+            margin-top: 5px;
+            font-size: 14px;
+            display: none;
+          }
           .leaflet-polylinedecorator-arrowhead {
             fill: none;
             stroke: red;
@@ -150,6 +160,7 @@ export default {
       <body>
         <div id="dateRange">
           <input type="text" id="dateRangePicker" placeholder="Select date range">
+          <div id="noDataWarning">No data available for the selected date range.</div>
         </div>
         <div id="map"></div>
         <script>
@@ -207,10 +218,12 @@ export default {
               }
             });
 
-            // Remove the "No data available" message if it exists
-            const noDataMessageContainer = document.querySelector('.no-data-message');
-            if (noDataMessageContainer) {
-              noDataMessageContainer.remove();
+            // Update the warning message visibility
+            const noDataWarning = document.getElementById('noDataWarning');
+            if (filteredLocations.length === 0) {
+              noDataWarning.style.display = 'block';
+            } else {
+              noDataWarning.style.display = 'none';
             }
 
             if (filteredLocations.length > 0) {
@@ -332,17 +345,6 @@ export default {
               }
             } else {
               console.log('No data available for the selected date range');
-              const noDataMessage = L.control({position: 'topright'});
-              noDataMessage.onAdd = function(map) {
-                const div = L.DomUtil.create('div', 'info no-data-message');
-                div.innerHTML = '<strong>No data available for the selected date range.</strong>';
-                div.style.backgroundColor = 'white';
-                div.style.padding = '10px';
-                div.style.borderRadius = '5px';
-                div.style.boxShadow = '0 1px 5px rgba(0,0,0,0.65)';
-                return div;
-              };
-              noDataMessage.addTo(map);
             }
 
             const latest = filteredLocations[filteredLocations.length - 1];
