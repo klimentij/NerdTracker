@@ -175,28 +175,13 @@ export default {
           }).addTo(map);
 
           function formatLocalDateTime(date) {
-            return date.toLocaleString(undefined, {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-              hour12: false
-            }).replace(/[/]/g, '-').replace(',', '');
+            const pad = (num) => (num < 10 ? '0' + num : num);
+            return \`\${date.getFullYear()}-\${pad(date.getMonth() + 1)}-\${pad(date.getDate())}T\${pad(date.getHours())}:\${pad(date.getMinutes())}:\${pad(date.getSeconds())}\`;
           }
 
           function convertToLocalTime(timestamp) {
-            return new Date(timestamp * 1000).toLocaleString(undefined, {
-              year: 'numeric',
-              month: '2-digit',
-              day: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-              hour12: false,
-              timeZoneName: 'short'
-            });
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString();
           }
 
           function getTimeSince(timestamp) {
@@ -425,7 +410,7 @@ export default {
             updateURLParams(start, end);
             console.log('Fetching locations for range:', start, 'to', end);
             try {
-              const response = await fetch(\`?start=\${encodeURIComponent(formatLocalDateTime(start))}&end=\${encodeURIComponent(formatLocalDateTime(end))}\`, {
+              const response = await fetch(\`?start=\${formatLocalDateTime(start)}&end=\${formatLocalDateTime(end)}\`, {
                 headers: {
                   'X-Requested-With': 'XMLHttpRequest'
                 }
