@@ -197,12 +197,12 @@ export default {
             return luxon.DateTime.fromISO(timestamp).setZone(userTimezone).toLocaleString(luxon.DateTime.DATETIME_FULL);
           }
 
-          function getTimeSince(timestamp) {
-            const now = new Date();
-            const then = new Date(timestamp * 1000);
-            const diff = Math.floor((now - then) / 1000);
+          function getTimeSince(isoTimestamp) {
+            const now = luxon.DateTime.local();
+            const then = luxon.DateTime.fromISO(isoTimestamp);
+            const diff = now.diff(then, 'seconds').seconds;
 
-            if (diff < 60) return \`\${diff} sec ago\`;
+            if (diff < 60) return \`\${Math.floor(diff)} sec ago\`;
             if (diff < 3600) return \`\${Math.floor(diff / 60)} min ago\`;
             if (diff < 86400) return \`\${Math.floor(diff / 3600)} hr ago\`;
             return \`\${Math.floor(diff / 86400)} days ago\`;
@@ -438,7 +438,7 @@ export default {
                 console.log('Fetched locations:', newLocations);
                 locations = newLocations.map(loc => ({
                   ...loc,
-                  tst: luxon.DateTime.fromISO(loc.tst).setZone(userTimezone).toJSDate()
+                  tst: loc.tst // Keep as ISO string, don't convert to Date
                 }));
                 updateMap(locations);
               } else {
