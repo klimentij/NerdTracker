@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { DateTime } from 'luxon';
 
 export interface Env {
   SUPABASE_URL: string;
@@ -23,13 +24,16 @@ export default {
     const url = new URL(request.url);
     let startDateTime = url.searchParams.get('start');
     let endDateTime = url.searchParams.get('end');
+    const userTimezone = request.headers.get('X-User-Timezone') || 'UTC';
 
-    // Set default dates if not provided
-    if (!startDateTime || !endDateTime) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      startDateTime = today.toISOString().slice(0, -5); // Remove milliseconds
-      endDateTime = new Date(today.setHours(23, 59, 59)).toISOString().slice(0, -5); // Remove milliseconds
+    // Convert start and end times to UTC
+    if (startDateTime && endDateTime) {
+      startDateTime = DateTime.fromISO(startDateTime, { zone: userTimezone }).toUTC().toISO();
+      endDateTime = DateTime.fromISO(endDateTime, { zone: userTimezone }).toUTC().toISO();
+    } else {
+      const now = DateTime.now().setZone(userTimezone);
+      startDateTime = now.startOf('day').toUTC().toISO();
+      endDateTime = now.endOf('day').toUTC().toISO();
       
       // Update URL with default dates
       url.searchParams.set('start', startDateTime);
@@ -95,6 +99,12 @@ export default {
       return new Response('Error fetching data', { status: 500 })
     }
 
+    // Convert fetched data to user's timezone
+    allData = allData.map(item => ({
+      ...item,
+      tst: DateTime.fromSeconds(item.tst).setZone(userTimezone).toISO(),
+    }));
+
     // Check if it's an AJAX request
     const isAjax = request.headers.get('X-Requested-With') === 'XMLHttpRequest';
 
@@ -117,6 +127,7 @@ export default {
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
         <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
         <script src="https://unpkg.com/leaflet-polylinedecorator/dist/leaflet.polylineDecorator.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/luxon@2.3.1/build/global/luxon.min.js"></script>
         <style>
           body { margin: 0; padding: 0; }
           #map { height: 100vh; width: 100%; }
@@ -174,14 +185,16 @@ export default {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           }).addTo(map);
 
+          // Detect user's timezone
+          const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          localStorage.setItem('userTimezone', userTimezone);
+
           function formatLocalDateTime(date) {
-            const pad = (num) => (num < 10 ? '0' + num : num);
-            return \`\${date.getFullYear()}-\${pad(date.getMonth() + 1)}-\${pad(date.getDate())}T\${pad(date.getHours())}:\${pad(date.getMinutes())}:\${pad(date.getSeconds())}\`;
+            return luxon.DateTime.fromJSDate(date).setZone(userTimezone).toFormat("yyyy-MM-dd'T'HH:mm:ss");
           }
 
           function convertToLocalTime(timestamp) {
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleString();
+            return luxon.DateTime.fromISO(timestamp).setZone(userTimezone).toLocaleString(luxon.DateTime.DATETIME_FULL);
           }
 
           function getTimeSince(timestamp) {
@@ -407,19 +420,27 @@ export default {
           }
 
           async function fetchLocations(start, end) {
+            const userTimezone = localStorage.getItem('userTimezone') || 'UTC';
+            const startUTC = luxon.DateTime.fromJSDate(start).setZone(userTimezone).toUTC().toISO();
+            const endUTC = luxon.DateTime.fromJSDate(end).setZone(userTimezone).toUTC().toISO();
+            
             updateURLParams(start, end);
             console.log('Fetching locations for range:', start, 'to', end);
             try {
-              const response = await fetch(\`?start=\${formatLocalDateTime(start)}&end=\${formatLocalDateTime(end)}\`, {
+              const response = await fetch(\`?start=\${startUTC}&end=\${endUTC}\`, {
                 headers: {
-                  'X-Requested-With': 'XMLHttpRequest'
+                  'X-Requested-With': 'XMLHttpRequest',
+                  'X-User-Timezone': userTimezone
                 }
               });
               if (response.ok) {
                 const newLocations = await response.json();
                 console.log('Fetched locations:', newLocations);
-                locations = newLocations; // Update the global locations variable
-                updateMap(newLocations);
+                locations = newLocations.map(loc => ({
+                  ...loc,
+                  tst: luxon.DateTime.fromISO(loc.tst).setZone(userTimezone).toJSDate()
+                }));
+                updateMap(locations);
               } else {
                 console.error('Failed to fetch locations, status:', response.status);
                 updateMap([]);
