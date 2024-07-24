@@ -3,10 +3,21 @@ import { createClient } from '@supabase/supabase-js'
 export interface Env {
   SUPABASE_URL: string;
   SUPABASE_KEY: string;
+  AUTH_USERNAME: string;
+  AUTH_PASSWORD: string;
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // Check if the user is authenticated
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !isAuthenticated(authHeader, env)) {
+      return new Response(loginHtml, {
+        headers: { 'WWW-Authenticate': 'Basic realm="Secure Area"', 'Content-Type': 'text/html' },
+        status: 401
+      });
+    }
+
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY)
 
     const url = new URL(request.url);
@@ -134,9 +145,22 @@ export default {
             stroke-width: 2;
             opacity: 0.6;
           }
+          #logoutButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            padding: 5px 10px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+          }
         </style>
       </head>
       <body>
+        <button id="logoutButton" onclick="logout()">Logout</button>
         <div id="dateRange">
           <input type="text" id="dateRangePicker" placeholder="Select date range">
         </div>
@@ -456,6 +480,11 @@ export default {
               return this._locations;
             }
           });
+
+          function logout() {
+            document.cookie = 'auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+            window.location.reload();
+          }
         </script>
       </body>
     </html>
@@ -468,3 +497,78 @@ export default {
     });
   },
 } as const;
+
+function isAuthenticated(authHeader: string, env: Env): boolean {
+  const [scheme, encoded] = authHeader.split(' ');
+
+  if (!encoded || scheme !== 'Basic') {
+    return false;
+  }
+
+  const buffer = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+  const decoded = new TextDecoder().decode(buffer).split(':');
+
+  const username = decoded[0];
+  const password = decoded[1];
+
+  // Simple comparison instead of bcrypt
+  return username === env.AUTH_USERNAME && password === env.AUTH_PASSWORD;
+}
+
+const loginHtml = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #f0f0f0;
+      }
+      form {
+        background-color: white;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      }
+      input {
+        display: block;
+        margin: 10px 0;
+        padding: 5px;
+        width: 200px;
+      }
+      button {
+        background-color: #4CAF50;
+        color: white;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <form id="loginForm">
+      <input type="text" id="username" placeholder="Username" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <button type="submit">Login</button>
+    </form>
+    <script>
+      document.getElementById('loginForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const encodedCredentials = btoa(username + ':' + password);
+        document.cookie = 'auth=Basic ' + encodedCredentials + '; path=/';
+        window.location.reload();
+      });
+    </script>
+  </body>
+</html>
+`;
