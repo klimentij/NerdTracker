@@ -137,6 +137,11 @@ export default {
             padding: 10px;
             border-radius: 5px;
             box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+            display: flex;
+            flex-direction: column;
+          }
+          #dateRange input {
+            margin-bottom: 5px;
           }
           .leaflet-polylinedecorator-arrowhead {
             fill: none;
@@ -148,7 +153,8 @@ export default {
       </head>
       <body>
         <div id="dateRange">
-          <input type="text" id="dateRangePicker" placeholder="Select date range">
+          <input type="text" id="startDatePicker" placeholder="Start date and time">
+          <input type="text" id="endDatePicker" placeholder="End date and time">
         </div>
         <div id="map"></div>
         <script>
@@ -388,10 +394,15 @@ export default {
             return R * c;
           }
 
+          function formatLocalDateTime(date) {
+            const pad = (num) => (num < 10 ? '0' + num : num);
+            return \`\${date.getFullYear()}-\${pad(date.getMonth() + 1)}-\${pad(date.getDate())}T\${pad(date.getHours())}:\${pad(date.getMinutes())}:\${pad(date.getSeconds())}\`;
+          }
+
           function updateURLParams(start, end) {
             const params = new URLSearchParams(window.location.search);
-            params.set('start', start.toISOString().slice(0, -5)); // Remove milliseconds
-            params.set('end', end.toISOString().slice(0, -5)); // Remove milliseconds
+            params.set('start', formatLocalDateTime(start));
+            params.set('end', formatLocalDateTime(end));
             window.history.replaceState({}, '', \`\${window.location.pathname}?\${params}\`);
           }
 
@@ -399,7 +410,7 @@ export default {
             updateURLParams(start, end);
             console.log('Fetching locations for range:', start, 'to', end);
             try {
-              const response = await fetch(\`?start=\${start.toISOString().slice(0, -5)}&end=\${end.toISOString().slice(0, -5)}\`, {
+              const response = await fetch(\`?start=\${formatLocalDateTime(start)}&end=\${formatLocalDateTime(end)}\`, {
                 headers: {
                   'X-Requested-With': 'XMLHttpRequest'
                 }
@@ -434,15 +445,27 @@ export default {
             endDate.setHours(23, 59, 59);
           }
 
-          const dateRangePicker = flatpickr("#dateRangePicker", {
-            mode: "range",
+          const startDatePicker = flatpickr("#startDatePicker", {
             enableTime: true,
-            defaultDate: [startDate, endDate],
-            dateFormat: "Y-m-dTH:i",
+            defaultDate: startDate,
+            dateFormat: "Y-m-d H:i",
+            time_24hr: true,
             onChange: function(selectedDates) {
-              if (selectedDates.length === 2) {
+              if (selectedDates.length === 1) {
                 startDate = selectedDates[0];
-                endDate = selectedDates[1];
+                fetchLocations(startDate, endDate);
+              }
+            }
+          });
+
+          const endDatePicker = flatpickr("#endDatePicker", {
+            enableTime: true,
+            defaultDate: endDate,
+            dateFormat: "Y-m-d H:i",
+            time_24hr: true,
+            onChange: function(selectedDates) {
+              if (selectedDates.length === 1) {
+                endDate = selectedDates[0];
                 fetchLocations(startDate, endDate);
               }
             }
