@@ -174,9 +174,29 @@ export default {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           }).addTo(map);
 
-          function formatTimestamp(timestamp) {
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleString();
+          function formatLocalDateTime(date) {
+            return date.toLocaleString(undefined, {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false
+            }).replace(/[/]/g, '-').replace(',', '');
+          }
+
+          function convertToLocalTime(timestamp) {
+            return new Date(timestamp * 1000).toLocaleString(undefined, {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false,
+              timeZoneName: 'short'
+            });
           }
 
           function getTimeSince(timestamp) {
@@ -286,7 +306,7 @@ export default {
                     console.log(\`Added circle for location \${index}: \${loc.lat}, \${loc.lon}\`);
                     
                     circle.bindTooltip(\`
-                      Time: \${formatTimestamp(loc.tst)}<br>
+                      Time: \${convertToLocalTime(loc.tst)}<br>
                       Coordinates: \${loc.lat}, \${loc.lon}<br>
                       Accuracy: \${loc.acc} meters<br>
                       Altitude: \${loc.alt} meters<br>
@@ -359,7 +379,7 @@ export default {
               }
               
               const popupContent = '<b>Current location (' + getTimeSince(latest.tst) + ')</b><br>' +
-                'Time: ' + formatTimestamp(latest.tst) + '<br>' +
+                'Time: ' + convertToLocalTime(latest.tst) + '<br>' +
                 'Coordinates: ' + latest.lat + ', ' + latest.lon + '<br>' +
                 'Accuracy: ' + latest.acc + ' meters<br>' +
                 'Altitude: ' + latest.alt + ' meters<br>' +
@@ -394,11 +414,6 @@ export default {
             return R * c;
           }
 
-          function formatLocalDateTime(date) {
-            const pad = (num) => (num < 10 ? '0' + num : num);
-            return \`\${date.getFullYear()}-\${pad(date.getMonth() + 1)}-\${pad(date.getDate())}T\${pad(date.getHours())}:\${pad(date.getMinutes())}:\${pad(date.getSeconds())}\`;
-          }
-
           function updateURLParams(start, end) {
             const params = new URLSearchParams(window.location.search);
             params.set('start', formatLocalDateTime(start));
@@ -410,7 +425,7 @@ export default {
             updateURLParams(start, end);
             console.log('Fetching locations for range:', start, 'to', end);
             try {
-              const response = await fetch(\`?start=\${formatLocalDateTime(start)}&end=\${formatLocalDateTime(end)}\`, {
+              const response = await fetch(\`?start=\${encodeURIComponent(formatLocalDateTime(start))}&end=\${encodeURIComponent(formatLocalDateTime(end))}\`, {
                 headers: {
                   'X-Requested-With': 'XMLHttpRequest'
                 }
