@@ -21,32 +21,31 @@ export default {
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY)
 
     const url = new URL(request.url);
-    let startDate = url.searchParams.get('start');
-    let endDate = url.searchParams.get('end');
+    let startDateTime = url.searchParams.get('start');
+    let endDateTime = url.searchParams.get('end');
 
     // Set default dates if not provided
-    if (!startDate || !endDate) {
+    if (!startDateTime || !endDateTime) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      startDate = today.toISOString().split('T')[0];
-      endDate = today.toISOString().split('T')[0];
+      startDateTime = today.toISOString().slice(0, -5); // Remove milliseconds
+      endDateTime = new Date(today.setHours(23, 59, 59)).toISOString().slice(0, -5); // Remove milliseconds
       
       // Update URL with default dates
-      url.searchParams.set('start', startDate);
-      url.searchParams.set('end', endDate);
+      url.searchParams.set('start', startDateTime);
+      url.searchParams.set('end', endDateTime);
       return Response.redirect(url.toString(), 302);
     }
 
     let allData = [];
     let error = null;
 
-    console.log(`Fetching data for range: ${startDate} to ${endDate}`);
+    console.log(`Fetching data for range: ${startDateTime} to ${endDateTime}`);
 
-    if (startDate && endDate) {
+    if (startDateTime && endDateTime) {
       try {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // Set to end of the day
+        const start = new Date(startDateTime);
+        const end = new Date(endDateTime);
 
         const startTimestamp = Math.floor(start.getTime() / 1000);
         const endTimestamp = Math.floor(end.getTime() / 1000);
@@ -391,8 +390,8 @@ export default {
 
           function updateURLParams(start, end) {
             const params = new URLSearchParams(window.location.search);
-            params.set('start', start.toISOString().split('T')[0]);
-            params.set('end', end.toISOString().split('T')[0]);
+            params.set('start', start.toISOString().slice(0, -5)); // Remove milliseconds
+            params.set('end', end.toISOString().slice(0, -5)); // Remove milliseconds
             window.history.replaceState({}, '', \`\${window.location.pathname}?\${params}\`);
           }
 
@@ -400,7 +399,7 @@ export default {
             updateURLParams(start, end);
             console.log('Fetching locations for range:', start, 'to', end);
             try {
-              const response = await fetch(\`?start=\${start.toISOString().split('T')[0]}&end=\${end.toISOString().split('T')[0]}\`, {
+              const response = await fetch(\`?start=\${start.toISOString().slice(0, -5)}&end=\${end.toISOString().slice(0, -5)}\`, {
                 headers: {
                   'X-Requested-With': 'XMLHttpRequest'
                 }
@@ -426,33 +425,28 @@ export default {
           
           let startDate, endDate;
           if (urlStartDate && urlEndDate) {
-            startDate = adjustForTimezone(new Date(urlStartDate));
-            endDate = adjustForTimezone(new Date(urlEndDate));
-            endDate.setHours(23, 59, 59, 999);
+            startDate = new Date(urlStartDate);
+            endDate = new Date(urlEndDate);
           } else {
             startDate = new Date();
             startDate.setHours(0, 0, 0, 0);
             endDate = new Date();
-            endDate.setHours(23, 59, 59, 999);
+            endDate.setHours(23, 59, 59);
           }
 
           const dateRangePicker = flatpickr("#dateRangePicker", {
             mode: "range",
+            enableTime: true,
             defaultDate: [startDate, endDate],
-            dateFormat: "Y-m-d",
+            dateFormat: "Y-m-dTH:i",
             onChange: function(selectedDates) {
               if (selectedDates.length === 2) {
                 startDate = selectedDates[0];
                 endDate = selectedDates[1];
-                endDate.setHours(23, 59, 59, 999); // Set to end of day
                 fetchLocations(startDate, endDate);
               }
             }
           });
-
-          function adjustForTimezone(date) {
-            return new Date(date.getTime() + date.getTimezoneOffset() * 60000);
-          }
 
           console.log('Initial locations:', locations);
           if (locations && locations.length > 0) {
