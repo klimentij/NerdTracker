@@ -1,27 +1,43 @@
 import { createClient } from '@supabase/supabase-js'
 import { DateTime } from 'luxon';
+import { parse } from 'cookie';
 
 export interface Env {
   SUPABASE_URL: string;
   SUPABASE_KEY: string;
   AUTH_USERNAME: string;
   AUTH_PASSWORD: string;
+  JWT_SECRET: string;
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url);
+    
     // Check if the user is authenticated
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !isAuthenticated(authHeader, env)) {
-      return new Response(loginHtml, {
-        headers: { 'WWW-Authenticate': 'Basic realm="Secure Area"', 'Content-Type': 'text/html' },
-        status: 401
-      });
+    const cookie = request.headers.get('Cookie');
+    const token = cookie ? parse(cookie).token : null;
+    
+    if (!token || !isValidToken(token, env.JWT_SECRET)) {
+      const authHeader = request.headers.get('Authorization');
+      if (!authHeader || !isAuthenticated(authHeader, env)) {
+        return new Response(loginHtml, {
+          headers: { 'WWW-Authenticate': 'Basic realm="Secure Area"', 'Content-Type': 'text/html' },
+          status: 401
+        });
+      } else {
+        // User authenticated via Basic Auth, set a cookie
+        const newToken = generateToken(env.JWT_SECRET);
+        const headers = new Headers({
+          'Set-Cookie': `token=${newToken}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+          'Location': url.pathname + url.search
+        });
+        return new Response(null, { status: 302, headers });
+      }
     }
 
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY)
 
-    const url = new URL(request.url);
     let startDateTime = url.searchParams.get('start');
     let endDateTime = url.searchParams.get('end');
     const userTimezone = request.headers.get('X-User-Timezone') || 'UTC';
@@ -545,6 +561,27 @@ function isAuthenticated(authHeader: string, env: Env): boolean {
   return username === env.AUTH_USERNAME && password === env.AUTH_PASSWORD;
 }
 
+function generateToken(secret: string): string {
+  // In a real-world scenario, use a proper JWT library
+  // This is a simplified example
+  const payload = {
+    exp: Math.floor(Date.now() / 1000) + (10 * 365 * 24 * 60 * 60), // 10 years expiration
+  };
+  return btoa(JSON.stringify(payload)) + '.' + btoa(secret);
+}
+
+function isValidToken(token: string, secret: string): boolean {
+  // In a real-world scenario, use a proper JWT library
+  // This is a simplified example
+  const [payloadBase64] = token.split('.');
+  try {
+    const payload = JSON.parse(atob(payloadBase64));
+    return payload.exp > Math.floor(Date.now() / 1000);
+  } catch {
+    return false;
+  }
+}
+
 const loginHtml = `
 <!DOCTYPE html>
 <html>
@@ -554,14 +591,13 @@ const loginHtml = `
   </head>
   <body>
     <script>
-      // Trigger the browser's built-in login prompt
       function showLoginPrompt() {
         const xhr = new XMLHttpRequest();
         xhr.open('GET', window.location.href, true);
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
         xhr.onreadystatechange = function() {
           if (xhr.readyState === 4) {
-            if (xhr.status === 200) {
+            if (xhr.status === 200 || xhr.status === 302) {
               window.location.reload();
             } else {
               showLoginPrompt();
