@@ -36,12 +36,13 @@ export default {
 			const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
 
 			// Select the last location from the locations table
-			const { data: lastLocation, error: selectError } = await supabase
+			const { data: lastLocationData, error: selectError } = await supabase
 				.from('locations')
-				.select('lat, lon, tst, SSID, conn')
+				.select('*')
 				.order('tst', { ascending: false })
-				.limit(1)
-				.single();
+				.limit(1);
+
+			const lastLocation = lastLocationData?.[0];
 
 			if (selectError) {
 				console.error('Error selecting last location:', selectError);
@@ -54,21 +55,29 @@ export default {
 				);
 				console.log(`Distance from last location: ${distanceInMeters} m`);
 
-				// Check distance
-				if (distanceInMeters < MIN_DISTANCE_THRESHOLD) {
-					console.log(`Skipping insertion: Distance < ${MIN_DISTANCE_THRESHOLD}m`);
-					return new Response(`Skipping insertion: Distance < ${MIN_DISTANCE_THRESHOLD}m`, { status: 200 });
-				}
+				// Check if update is needed
+				const shouldUpdate = distanceInMeters < MIN_DISTANCE_THRESHOLD ||
+					(body.conn === 'w' && lastLocation.conn === 'w' && 
+					lastLocation.SSID && body.SSID && lastLocation.SSID === body.SSID);
 
-				// Check SSID only when connection type is 'w'
-				if (body.conn === 'w' && lastLocation.conn === 'w' && 
-					lastLocation.SSID && body.SSID && lastLocation.SSID === body.SSID) {
-					console.log('Skipping insertion: Same non-null SSID on WiFi connection');
-					return new Response('Skipping insertion: Same non-null SSID on WiFi connection', { status: 200 });
+				if (shouldUpdate) {
+					console.log('Updating last location');
+					const { data: updateData, error: updateError } = await supabase
+						.from('locations')
+						.update(body)
+						.eq('tst', lastLocation.tst);
+
+					if (updateError) {
+						console.error('Error updating data:', updateError);
+						return new Response('Error updating data', { status: 500 });
+					}
+
+					console.log('Data updated successfully');
+					return new Response('Data updated successfully', { status: 200 });
 				}
 			}
 
-			// Insert the data into the locations table
+			// If no update was needed, proceed with insertion
 			const { data, error } = await supabase
 					.from('locations')
 					.insert(body);
