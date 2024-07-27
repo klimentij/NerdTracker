@@ -55,13 +55,12 @@ export default {
 				);
 				console.log(`Distance from last location: ${distanceInMeters} m`);
 
-				// Check if update is needed
-				const shouldUpdate = distanceInMeters < MIN_DISTANCE_THRESHOLD ||
-					(body.conn === 'w' && lastLocation.conn === 'w' && 
-					lastLocation.SSID && body.SSID && lastLocation.SSID === body.SSID);
+				// Check if it's the same WiFi first
+				const isSameWifi = body.conn === 'w' && lastLocation.conn === 'w' && 
+					lastLocation.SSID && body.SSID && lastLocation.SSID === body.SSID;
 
-				if (shouldUpdate) {
-					console.log('Updating last location');
+				if (isSameWifi) {
+					console.log('Updating last location (same WiFi)');
 					const { data: updateData, error: updateError } = await supabase
 						.from('locations')
 						.update(body)
@@ -74,6 +73,9 @@ export default {
 
 					console.log('Data updated successfully');
 					return new Response('Data updated successfully', { status: 200 });
+				} else if (distanceInMeters < MIN_DISTANCE_THRESHOLD) {
+					console.log('Distance below threshold, skipping insertion/update');
+					return new Response('Location unchanged', { status: 200 });
 				}
 			}
 
