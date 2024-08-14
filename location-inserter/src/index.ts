@@ -7,6 +7,13 @@ interface Env {
   SUPABASE_KEY: string;
 }
 
+// Maximum distance (in meters) between consecutive locations to be considered part of the same "hangout"
+// If all of the last LAST_LOCATIONS_COUNT locations are within this distance, we update the last location instead of inserting a new one
+const HANGOUT_SILENCE_DIST = 100;
+
+// Number of recent locations to consider when determining if the user is in a "hangout"
+const LAST_LOCATIONS_COUNT = 10;
+
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		// Check if the request method is POST
@@ -30,24 +37,28 @@ export default {
 			// Initialize Supabase client
 			const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
 
-			// Select the last location from the locations table
-			const { data: lastLocationData, error: selectError } = await supabase
+			// Select the last LAST_LOCATIONS_COUNT locations from the locations table
+			const { data: lastLocationsData, error: selectError } = await supabase
 				.from('locations')
 				.select('*')
 				.order('tst', { ascending: false })
-				.limit(1);
-
-			const lastLocation = lastLocationData?.[0];
+				.limit(LAST_LOCATIONS_COUNT);
 
 			if (selectError) {
-				console.error('Error selecting last location:', selectError);
-			} else if (lastLocation) {
-				// Check if it's the same WiFi
-				const isSameWifi = body.conn === 'w' && lastLocation.conn === 'w' && 
-					lastLocation.SSID && body.SSID && lastLocation.SSID === body.SSID;
+				console.error('Error selecting last locations:', selectError);
+				return new Response('Error selecting last locations', { status: 500 });
+			}
 
-				if (isSameWifi) {
-					console.log('Updating last location (same WiFi)');
+			const lastLocation = lastLocationsData?.[0];
+
+			if (lastLocation) {
+				// Check if all distances are within HANGOUT_SILENCE_DIST
+				const allWithinDistance = lastLocationsData.every(loc => 
+					calculateDistance(body.lat, body.lon, loc.lat, loc.lon) <= HANGOUT_SILENCE_DIST
+				);
+
+				if (allWithinDistance) {
+					console.log('Updating last location (within hangout distance)');
 					const { data: updateData, error: updateError } = await supabase
 						.from('locations')
 						.update(body)
@@ -65,8 +76,8 @@ export default {
 
 			// If no update was needed, proceed with insertion
 			const { data, error } = await supabase
-					.from('locations')
-					.insert(body);
+						.from('locations')
+						.insert(body);
 
 			if (error) {
 				console.error('Error inserting data:', error);
@@ -87,4 +98,19 @@ function isValidBasicAuth(authHeader: string, env: Env): boolean {
 	const credentials = atob(base64Credentials);
 	const [username, password] = credentials.split(':');
 	return username === env.AUTH_USER && password === env.AUTH_PASS;
+}
+
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+	const R = 6371e3; // Earth's radius in meters
+	const φ1 = lat1 * Math.PI / 180;
+	const φ2 = lat2 * Math.PI / 180;
+	const Δφ = (lat2 - lat1) * Math.PI / 180;
+	const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+	const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+			  Math.cos(φ1) * Math.cos(φ2) *
+			  Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+	return R * c; // Distance in meters
 }
