@@ -87,7 +87,7 @@ export default {
         console.log(`Querying Supabase for tst range: ${startTimestamp} to ${endTimestamp}`);
 
         let page = 0;
-        const pageSize = 1000;
+        const pageSize = 100000;
         let hasMore = true;
 
         while (hasMore) {
