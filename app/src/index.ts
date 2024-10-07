@@ -62,8 +62,8 @@ export default {
       endDateTime = DateTime.fromISO(endDateTime, { zone: userTimezone }).toUTC().toISO();
     } else {
       const now = DateTime.now().setZone(userTimezone);
-      startDateTime = now.startOf('day').toUTC().toISO();
-      endDateTime = now.endOf('day').toUTC().toISO();
+      endDateTime = now.toUTC().toISO();
+      startDateTime = now.minus({ hours: 24 }).toUTC().toISO();
       
       // Update URL with default dates
       url.searchParams.set('start', startDateTime);
@@ -490,10 +490,10 @@ export default {
             startDate = luxon.DateTime.fromISO(urlStartDate).toJSDate();
             endDate = luxon.DateTime.fromISO(urlEndDate).toJSDate();
           } else {
-            // Set start to 00:00 and end to 23:59 of the current day
+            // Set end to current time and start to 24 hours ago
             const now = luxon.DateTime.now().setZone(userTimezone);
-            startDate = now.startOf('day').toJSDate();
-            endDate = now.endOf('day').toJSDate();
+            endDate = now.toJSDate();
+            startDate = now.minus({ hours: 24 }).toJSDate();
           }
 
           const startDatePicker = flatpickr("#startDatePicker", {
