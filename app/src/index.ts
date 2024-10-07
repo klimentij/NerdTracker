@@ -8,6 +8,7 @@ export interface Env {
   AUTH_USERNAME: string;
   AUTH_PASSWORD: string;
   JWT_SECRET: string;
+  MAGIC_LINK_SECRET: string; // Add this line
 }
 
 export default {
@@ -18,6 +19,19 @@ export default {
     const cookie = request.headers.get('Cookie');
     const token = cookie ? parse(cookie).token : null;
     
+    // Check for magic link token
+    const magicLinkToken = url.searchParams.get('token');
+    
+    if (magicLinkToken === env.MAGIC_LINK_SECRET) {
+      // User authenticated via magic link, set a cookie
+      const newToken = generateToken(env.JWT_SECRET);
+      const headers = new Headers({
+        'Set-Cookie': `token=${newToken}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+        'Location': url.pathname // Redirect to the same page without the token parameter
+      });
+      return new Response(null, { status: 302, headers });
+    }
+
     if (!token || !isValidToken(token, env.JWT_SECRET)) {
       const authHeader = request.headers.get('Authorization');
       if (!authHeader || !isAuthenticated(authHeader, env)) {
