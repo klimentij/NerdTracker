@@ -280,6 +280,54 @@ This feature is particularly useful for:
 - Cleaner location history
 - Better performance in the web interface
 
+## 🆓 Free Tier Limits & Scaling Considerations
+
+### Current Free Tier Limits (as of Nov 2024)
+
+#### Supabase Free Tier ([View current limits](https://supabase.com/pricing))
+- 50,000 monthly active users
+- 500 MB database space
+- 5 GB bandwidth
+- 1 GB file storage
+- Projects paused after 1 week of inactivity
+- Limited to 2 active projects
+
+#### Cloudflare Workers Free Tier ([View current limits](https://developers.cloudflare.com/workers/platform/pricing/))
+- 100,000 requests per day
+- 10ms CPU time per invocation
+- No charge for duration
+
+#### Real-World Usage Example
+With the recommended settings (30-second location updates):
+- ~2,000-3,000 location-inserter function requests per day
+- ~4.24 MB of new location data per month (based on actual usage data while being mostly based in a single city with occasional trips)
+  - Full-time traveling with daily movement would consume significantly more data
+  - At current usage rates, the 500 MB free tier limit would support ~9.45 years of tracking
+  - Each location record uses approximately 0.5 KB of storage
+
+This means the free tier limits comfortably support personal tracking needs, with Cloudflare using only ~2-3% of its daily request limit.
+
+### 📈 Scaling Considerations
+
+As your tracking data grows, you may need to:
+
+1. **Manage Database Size**:
+   - Export and archive older records
+   - Delete unnecessary location points
+   - Consider implementing data retention policies
+
+2. **Optimize Costs**:
+   - Reduce Cloudflare Workers usage by adjusting tracking frequency
+   - Implement more aggressive stationary detection
+   - Clean up duplicate or unnecessary location points
+
+3. **Upgrade Options**:
+   - If you need more storage/bandwidth, consider Supabase Pro ($25/month)
+   - For high-frequency tracking, consider Cloudflare Workers Paid ($5/month)
+   - Cost-benefit analysis vs. data management effort
+
+> 💡 **Tip**: For hobby projects, managing data size through exports/cleanup is often more cost-effective than upgrading tiers.
+
 ## 🤝 Contributing
 
 Contributions are what make the open source community amazing! Any contributions you make are **greatly appreciated**.
