@@ -36,7 +36,7 @@ While Google Timeline is sunsetting its web version and paid services offer limi
 
 1. 📱 **Mobile Device**
    - iPhone or Android with [OwnTracks](https://owntracks.org/) installed
-   - Tested primarily with iPhone 11
+   - Primary testing done on iPhone 11, but Android is supported
 
 2. ☁️ **Required Accounts**
    - [Cloudflare Account](https://cloudflare.com) (Free tier)
@@ -44,20 +44,31 @@ While Google Timeline is sunsetting its web version and paid services offer limi
 
 ### 🔧 Development Environment Setup
 
+> Note: This setup guide is written and tested for macOS but can be adapted for Linux or Windows systems.
+
 1. Install nvm (Node Version Manager):
    ```bash
    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
    ```
-
-2. Install Node.js (restart terminal first):
+   
+   **If curl command fails or nvm not found:**
    ```bash
+   # Install via Homebrew
+   brew install node
+   ```
+
+2. Install Node.js:
+   ```bash
+   # If using nvm (restart terminal first):
    nvm install 23
+
+   # If installed via Homebrew, skip this step
    ```
 
 3. Verify installations:
    ```bash
-   node -v  # should print `v23.2.0`
-   npm -v   # should print `10.9.0`
+   node -v
+   npm -v
    ```
 
 4. Install Wrangler CLI:
