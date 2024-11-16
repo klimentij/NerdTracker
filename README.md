@@ -6,6 +6,34 @@
 
 > Smartphone + free services = real-time tracking & location history for active people. Privacy-focused, you own your data!
 
+## 📑 Table of Contents
+- [🌍 NerdTracker](#-nerdtracker)
+  - [📑 Table of Contents](#-table-of-contents)
+  - [📱 What's This?](#-whats-this)
+    - [🎯 Who Is This For?](#-who-is-this-for)
+    - [💡 Why I Created This](#-why-i-created-this)
+    - [🌟 Key Benefits](#-key-benefits)
+  - [🌟 Overview](#-overview)
+    - [✨ Key Features](#-key-features)
+  - [🛠️ Prerequisites](#️-prerequisites)
+    - [🔧 Development Environment Setup](#-development-environment-setup)
+  - [🚀 Setup Instructions](#-setup-instructions)
+    - [1. Project Setup](#1-project-setup)
+    - [2. Supabase Configuration](#2-supabase-configuration)
+    - [3. Application Configuration](#3-application-configuration)
+    - [4. Deploy Services](#4-deploy-services)
+    - [5. Configure OwnTracks](#5-configure-owntracks)
+    - [🔒 Security Notes](#-security-notes)
+    - [Location Inserter Configuration](#location-inserter-configuration)
+  - [🆓 Free Tier Limits \& Scaling Considerations](#-free-tier-limits--scaling-considerations)
+    - [Current Free Tier Limits (as of Nov 2024)](#current-free-tier-limits-as-of-nov-2024)
+      - [Supabase Free Tier (View current limits)](#supabase-free-tier-view-current-limits)
+      - [Cloudflare Workers Free Tier (View current limits)](#cloudflare-workers-free-tier-view-current-limits)
+      - [Real-World Usage Example](#real-world-usage-example)
+    - [📈 Scaling Considerations](#-scaling-considerations)
+  - [🤝 Contributing](#-contributing)
+  - [📜 Credits](#-credits)
+
 ## 📱 What's This?
 
 NerdTracker was born from real-world needs during extensive overland travel throughout the Americas. As a digital nomad driving from Alaska to Ushuaia and exploring South America multiple times, I needed a better way to:
