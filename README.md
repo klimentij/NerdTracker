@@ -36,34 +36,59 @@ While Google Timeline is sunsetting its web version and paid services offer limi
    - iPhone or Android with [OwnTracks](https://owntracks.org/) installed
    - Tested primarily with iPhone 11
 
-2. ☁️ **Services**
+2. ☁️ **Required Accounts**
    - [Cloudflare Account](https://cloudflare.com) (Free tier)
    - [Supabase Account](https://supabase.com) (Free tier)
 
-## 🏃‍♂️ Getting Started
+### 🔧 Development Environment Setup
 
-### 📱 1. Mobile Setup
-1. Install [OwnTracks](https://owntracks.org/) on your mobile device
-   - [iOS App Store](https://apps.apple.com/us/app/owntracks/id692424691)
-   - [Android Play Store](https://play.google.com/store/apps/details?id=org.owntracks.android)
+1. Install nvm (Node Version Manager):
+   ```bash
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+   ```
 
-### ☁️ 2. Supabase Setup
-1. Create a free Supabase account:
-   - Sign up at [supabase.com/dashboard/sign-up](https://supabase.com/dashboard/sign-up)
-   - Or [self-host Supabase](https://supabase.com/docs/guides/self-hosting) for complete privacy
+2. Install Node.js (restart terminal first):
+   ```bash
+   nvm install 23
+   ```
 
-2. Create New Project:
+3. Verify installations:
+   ```bash
+   node -v  # should print `v23.2.0`
+   npm -v   # should print `10.9.0`
+   ```
+
+4. Install Wrangler CLI:
+   ```bash
+   npm install -g wrangler
+   ```
+
+5. Authenticate with Cloudflare:
+   ```bash
+   wrangler login
+   ```
+
+## 🚀 Setup Instructions
+
+### 1. Project Setup
+1. Clone this repository
+2. Install dependencies:
+   ```bash
+   cd location-inserter && npm install
+   cd ../app && npm install
+   ```
+
+### 2. Supabase Configuration
+1. Create a new Supabase project:
    - Go to [supabase.com/dashboard/projects](https://supabase.com/dashboard/projects)
-   - Create new organization (or use existing)
    - Click "New Project"
-   - Choose a name and password
-   - Select the free tier and your preferred region
-   - Keep default security settings (Data API with public schema enabled)
-   - Wait for project initialization (usually 1-2 minutes)
+   - Note down:
+     - Project URL
+     - `anon` public key (Settings -> API)
 
-3. Create Database Table:
-   - Go to the SQL editor in your Supabase dashboard
-   - Copy and paste the following SQL:
+2. Create database table:
+   - Go to SQL editor in Supabase dashboard
+   - Execute the following SQL:
    ```sql
    -- Create the table
    create table if not exists locations (
@@ -128,7 +153,47 @@ While Google Timeline is sunsetting its web version and paid services offer limi
    ```
    - Click "Run" to execute the SQL commands
 
-[Additional setup steps coming soon...]
+### 3. Application Configuration
+1. Run the setup script:
+   ```bash
+   python3 setup.py
+   ```
+   - Enter your Supabase project URL and anon key when prompted
+   - Save the generated passwords securely
+
+### 4. Deploy Services
+1. Deploy location ingestion service:
+   ```bash
+   cd location-inserter
+   npx wrangler secret:bulk < secrets.json
+   npm run deploy
+   ```
+   Note the deployed URL (e.g., `https://location-inserter.your-name.workers.dev`)
+
+2. Deploy web interface:
+   ```bash
+   cd ../app
+   npx wrangler secret:bulk < secrets.json
+   npm run deploy
+   ```
+
+### 5. Verify Deployment
+1. Check location-inserter logs:
+   ```bash
+   cd location-inserter
+   wrangler tail
+   ```
+
+2. The setup script will output:
+   - OwnTracks connection details
+   - Web interface credentials
+   - Location inserter endpoint URL
+
+### 🔒 Security Notes
+- Store all passwords from setup.py output securely
+- All endpoints use HTTPS encryption
+- Authentication is required for all access
+- Location data is stored only in your Supabase database
 
 ## 🤝 Contributing
 

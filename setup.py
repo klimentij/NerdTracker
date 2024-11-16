@@ -9,7 +9,7 @@ import urllib.error
 import urllib.parse
 
 def generate_secret(length: int) -> str:
-    """Generate a random string of specified length."""
+    """Generate a random string of specified length."""Priya, Ko Naam
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
