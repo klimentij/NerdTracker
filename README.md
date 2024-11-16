@@ -59,16 +59,11 @@ NerdTracker is an open-source solution for digital nomads and location tracking 
 - ⚙️ Customizable tracking parameters
 - 💨 Fast, serverless architecture
 - 💰 Completely free to run
-
-## 🚀 Why NerdTracker?
-
-While Google Timeline is sunsetting its web version and paid services offer limited functionality, NerdTracker provides:
-
-- **Complete Data Ownership** - Your location data stays in your Supabase database
-- **Cost Effectiveness** - Built entirely on free tiers of Supabase and Cloudflare
-- **Privacy First** - No third-party tracking or data sharing
-- **Customization** - Fine-tune tracking frequency and storage policies
-- **Open Source** - Modify and extend as needed
+- 🔄 Smart Stationary Mode
+  - Automatically detects when you're stationary
+  - Prevents database clutter by updating existing records
+  - Configurable distance threshold (default: 100m)
+  - Considers the last N locations (default: 10)
 
 ## 🛠️ Prerequisites
 
@@ -259,6 +254,31 @@ For more details on location tracking parameters, see the [OwnTracks Documentati
 - All endpoints use HTTPS encryption
 - Authentication is required for all access
 - Location data is stored only in your Supabase database
+
+### Location Inserter Configuration
+
+The location inserter includes a smart "hangout" detection algorithm to prevent database clutter when you're staying in one place. Here's how it works:
+
+- When a new location is received, it checks the last 10 locations
+- If all these locations are within 100 meters of each other, it considers you're "hanging out" in the same spot
+- Instead of creating new entries, it updates the most recent location record
+- This helps prevent thousands of nearly identical records when you're stationary
+
+Default values (defined in `location-inserter/src/index.ts`):
+
+```typescript
+HANGOUT_SILENCE_DIST = 100    // Maximum distance (meters) between locations to be considered a hangout
+LAST_LOCATIONS_COUNT = 10     // Number of recent locations to check
+```
+
+To modify these values:
+1. Update the constants in `location-inserter/src/index.ts`
+2. Redeploy the worker with `npm run deploy --prefix location-inserter`
+
+This feature is particularly useful for:
+- Reducing database size and costs
+- Cleaner location history
+- Better performance in the web interface
 
 ## 🤝 Contributing
 
