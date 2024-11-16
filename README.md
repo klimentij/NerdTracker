@@ -9,6 +9,8 @@
 
 NerdTracker is an open-source solution for digital nomads and location tracking enthusiasts who want complete control over their movement data. Built with privacy in mind, it leverages free-tier services to create a powerful, cost-effective tracking system.
 
+![Web UI Screenshot](web-ui.jpg)
+
 ### ✨ Key Features
 
 - 📱 24/7 iPhone location tracking via OwnTracks
