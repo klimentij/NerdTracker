@@ -164,14 +164,14 @@ While Google Timeline is sunsetting its web version and paid services offer limi
 ### 4. Deploy Services
 1. Deploy location ingestion service from root directory:
    ```bash
-   npx wrangler secret:bulk --path location-inserter/secrets.json
+   npx wrangler secret bulk location-inserter/secrets.json --name location-inserter
    npm run deploy --prefix location-inserter
    ```
    Note the deployed URL (e.g., `https://location-inserter.your-name.workers.dev`)
 
 2. Deploy web interface from root directory:
    ```bash
-   npx wrangler secret:bulk --path app/secrets.json
+   npx wrangler secret bulk app/secrets.json --name tracker
    npm run deploy --prefix app
    ```
 
