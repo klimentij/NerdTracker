@@ -175,16 +175,33 @@ While Google Timeline is sunsetting its web version and paid services offer limi
    npm run deploy --prefix app
    ```
 
-### 5. Verify Deployment
-1. Check location-inserter logs from root directory:
-   ```bash
-   npx wrangler tail location-inserter
+### 5. Configure OwnTracks
+1. Install and open OwnTracks app on your phone
+2. Go to Settings (click ⓘ icon)
+3. Configure the following settings:
+   - **TrackerID**: Your initials (e.g., "KS")
+   - **DeviceID**: Descriptive device name (e.g., "Klim's iPhone")
+   - **UserID**: Use "AUTH_USER" from location-inserter/secrets.json
+   - **Password**: Use "AUTH_PASS" from location-inserter/secrets.json
+   - **URL**: Your location-inserter URL (from deployment step)
+   
+4. Optional Settings:
+   - **pubTopicBase**: Current trip name (will be added to every location)
+
+5. Recommended GPS Settings (for high-accuracy permanent tracking):
+   ```
+   Mode: Move
+   ignoreInaccurateLocations: 50
+   locatorDisplacement: 80
+   locatorInterval: 30
+   positions: 10
+   maxHistory: 0
+   monitoring: -1
+   downgrade: 0
+   extended data: True
    ```
 
-2. The setup script will output:
-   - OwnTracks connection details
-   - Web interface credentials
-   - Location inserter endpoint URL
+For more details on location tracking parameters, see the [OwnTracks Documentation](https://owntracks.org/booklet/features/location/).
 
 ### 🔒 Security Notes
 - Store all passwords from setup.py output securely
