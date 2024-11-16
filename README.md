@@ -2,14 +2,36 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+[![Version](https://img.shields.io/badge/version-v0.1.0--beta-blue)](https://github.com/yourusername/nerdtracker/releases)
 
-> 🗺️ Your personal, privacy-focused location tracking system that you actually own!
+> Smartphone + free services = real-time tracking & location history for active people. Privacy-focused, you own your data!
+
+## 📱 What's This?
+
+NerdTracker turns your smartphone into a personal location tracking system that runs 24/7/365 in the background. Unlike temporary location sharing in messaging apps, it continuously records your movements and provides both real-time location and detailed movement history.
+
+![NerdTracker Web Interface](web-ui.jpg)
+
+### 🎯 Who Is This For?
+
+- **Active People** who want to track all their movements, routes, and visited places
+- **Digital Nomads** looking to maintain a detailed log of their travels
+- **Privacy-Conscious Users** who want full control over their location data
+- **Tech Enthusiasts** interested in self-hosting their location tracking solution
+- **Outdoor Adventurers** wanting to record their activities and share location with family
+
+### 💡 Why Use This?
+
+- **Zero Cost** - Built entirely on free tiers of Supabase and Cloudflare
+- **True Privacy** - Your data stays in your own database, no third parties involved
+- **Always On** - Runs continuously in the background without interruptions
+- **Battery Efficient** - Optimized for all-day tracking without draining your battery
+- **Data Rich** - Captures detailed data including altitude, speed, WiFi connections, and more
+- **Full Control** - Customize tracking frequency, accuracy, and data retention
 
 ## 🌟 Overview
 
 NerdTracker is an open-source solution for digital nomads and location tracking enthusiasts who want complete control over their movement data. Built with privacy in mind, it leverages free-tier services to create a powerful, cost-effective tracking system.
-
-![Web UI Screenshot](web-ui.jpg)
 
 ### ✨ Key Features
 
