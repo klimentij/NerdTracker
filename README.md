@@ -72,10 +72,10 @@ While Google Timeline is sunsetting its web version and paid services offer limi
 
 ### 1. Project Setup
 1. Clone this repository
-2. Install dependencies:
+2. Install dependencies from the root directory:
    ```bash
-   cd location-inserter && npm install
-   cd ../app && npm install
+   npm install --prefix location-inserter
+   npm install --prefix app
    ```
 
 ### 2. Supabase Configuration
@@ -162,26 +162,23 @@ While Google Timeline is sunsetting its web version and paid services offer limi
    - Save the generated passwords securely
 
 ### 4. Deploy Services
-1. Deploy location ingestion service:
+1. Deploy location ingestion service from root directory:
    ```bash
-   cd location-inserter
-   npx wrangler secret:bulk < secrets.json
-   npm run deploy
+   npx wrangler secret:bulk --path location-inserter/secrets.json
+   npm run deploy --prefix location-inserter
    ```
    Note the deployed URL (e.g., `https://location-inserter.your-name.workers.dev`)
 
-2. Deploy web interface:
+2. Deploy web interface from root directory:
    ```bash
-   cd ../app
-   npx wrangler secret:bulk < secrets.json
-   npm run deploy
+   npx wrangler secret:bulk --path app/secrets.json
+   npm run deploy --prefix app
    ```
 
 ### 5. Verify Deployment
-1. Check location-inserter logs:
+1. Check location-inserter logs from root directory:
    ```bash
-   cd location-inserter
-   wrangler tail
+   npx wrangler tail location-inserter
    ```
 
 2. The setup script will output:
