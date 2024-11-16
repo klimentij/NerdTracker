@@ -8,26 +8,42 @@
 
 ## 📱 What's This?
 
-NerdTracker turns your smartphone into a personal location tracking system that runs 24/7/365 in the background. Unlike temporary location sharing in messaging apps, it continuously records your movements and provides both real-time location and detailed movement history.
+NerdTracker was born from real-world needs during extensive overland travel throughout the Americas. As a digital nomad driving from Alaska to Ushuaia and exploring South America multiple times, I needed a better way to:
+- Track new vs. previously driven roads
+- Remember and return to favorite spots
+- Share real-time location with trusted contacts during remote travel
+- Maintain a comprehensive database of my movements for analysis
+
+Unlike temporary location sharing in messaging apps, it continuously records your movements and provides both real-time location and detailed movement history.
 
 ![NerdTracker Web Interface](web-ui.jpg)
 
 ### 🎯 Who Is This For?
 
-- **Active People** who want to track all their movements, routes, and visited places
-- **Digital Nomads** looking to maintain a detailed log of their travels
+- **Overlanders & Adventurers** exploring remote areas who need reliable tracking and safety features
+- **Digital Nomads** wanting to maintain detailed travel logs and avoid repeated routes
+- **Remote Travelers** needing to share location with trusted contacts for safety
 - **Privacy-Conscious Users** who want full control over their location data
-- **Tech Enthusiasts** interested in self-hosting their location tracking solution
-- **Outdoor Adventurers** wanting to record their activities and share location with family
+- **Data Enthusiasts** interested in analyzing their movement patterns
 
-### 💡 Why Use This?
+### 💡 Why I Created This
 
+After years of overland travel, I faced several challenges:
+- **Safety in Remote Areas**: Needed a way for trusted contacts to check my last known location, speed, and connected WiFi networks in case of emergencies
+- **Route Planning**: Existing solutions made it difficult to identify truly new routes vs. previously traveled paths
+- **Data Ownership**: Manual uploading of KML/GPX files to Google My Maps was time-consuming and limiting
+- **Offline Capability**: Required a system that could queue location updates during spotty signal
+- **Privacy & Control**: Wanted full ownership of location data in a queryable database format
+- **Cost**: Needed a free, sustainable solution for continuous tracking
+
+### 🌟 Key Benefits
+
+- **Safety First** - Share a URL with trusted contacts for emergency location monitoring
+- **Comprehensive Data** - Track locations, speeds, WiFi connections, and more
+- **Offline Ready** - Queues updates during poor connectivity
 - **Zero Cost** - Built entirely on free tiers of Supabase and Cloudflare
-- **True Privacy** - Your data stays in your own database, no third parties involved
-- **Always On** - Runs continuously in the background without interruptions
-- **Battery Efficient** - Optimized for all-day tracking without draining your battery
-- **Data Rich** - Captures detailed data including altitude, speed, WiFi connections, and more
-- **Full Control** - Customize tracking frequency, accuracy, and data retention
+- **True Privacy** - Your data stays in your own database
+- **Data Analysis Ready** - SQL-queryable database for custom analysis
 
 ## 🌟 Overview
 
@@ -253,6 +269,14 @@ Contributions are what make the open source community amazing! Any contributions
 3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+## 📜 Credits
+
+This project wouldn't be possible without these amazing open source projects:
+
+- [OwnTracks iOS](https://github.com/owntracks/ios) - The incredible iOS app that powers location tracking
+  - License: [MIT](https://github.com/owntracks/ios/blob/master/LICENSE)
+  - Copyright (c) 2015-2023 OwnTracks
 
 ---
 
