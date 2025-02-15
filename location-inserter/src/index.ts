@@ -34,6 +34,19 @@ export default {
 			// Parse the JSON body
 			const body = await request.json();
 			
+			// Remove fields that are not in our schema
+			const allowedFields = [
+				'lat', 'lon', 'acc', 'alt', 'vel', 'vac', 'p', 'cog', 'rad', 'tst',
+				'created_at', 'tag', 'topic', '_type', 'tid', 'conn', 'batt', 'bs',
+				'w', 'o', 'm', 'ssid', 'bssid', 'inregions', 'inrids', 'desc',
+				'uuid', 'major', 'minor', 'event', 'wtst', 'poi', 'r', 'u', 't',
+				'c', 'b', 'face', 'steps', 'from_epoch', 'to_epoch', 'data', 'request'
+			];
+
+			const cleanBody = Object.fromEntries(
+				Object.entries(body).filter(([key]) => allowedFields.includes(key))
+			);
+			
 			// Initialize Supabase client
 			const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
 
@@ -54,14 +67,14 @@ export default {
 			if (lastLocation) {
 				// Check if all distances are within HANGOUT_SILENCE_DIST
 				const allWithinDistance = lastLocationsData.every(loc => 
-					calculateDistance(body.lat, body.lon, loc.lat, loc.lon) <= HANGOUT_SILENCE_DIST
+					calculateDistance(cleanBody.lat, cleanBody.lon, loc.lat, loc.lon) <= HANGOUT_SILENCE_DIST
 				);
 
 				if (allWithinDistance) {
 					console.log('Updating last location (within hangout distance)');
 					const { data: updateData, error: updateError } = await supabase
 						.from('locations')
-						.update(body)
+						.update(cleanBody)
 						.eq('tst', lastLocation.tst);
 
 					if (updateError) {
@@ -77,7 +90,7 @@ export default {
 			// If no update was needed, proceed with insertion
 			const { data, error } = await supabase
 						.from('locations')
-						.insert(body);
+						.insert(cleanBody);
 
 			if (error) {
 				console.error('Error inserting data:', error);
