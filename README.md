@@ -188,8 +188,8 @@ NerdTracker is an open-source solution for digital nomads and location tracking 
      "w" boolean,            -- Indicates if the phone is connected to WiFi
      "o" boolean,            -- Indicates if the phone is offline
      "m" int,                -- Monitoring mode (1=significant, 2=move)
-     "SSID" varchar,         -- SSID of the WiFi
-     "BSSID" varchar,        -- BSSID of the WiFi
+     "ssid" varchar,         -- SSID of the WiFi
+     "bssid" varchar,        -- BSSID of the WiFi
      "inregions" text[],     -- List of regions the device is currently in
      "inrids" text[],        -- List of region IDs the device is currently in
      "desc" varchar,         -- Description (used for waypoints and transitions)
