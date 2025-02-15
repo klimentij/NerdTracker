@@ -93,7 +93,7 @@ export default {
         while (hasMore) {
           const { data: fetchedData, error: fetchError, count } = await supabase
             .from('locations')
-            .select('lat,lon,acc,alt,vel,batt,SSID,tag,topic,tid,tst,conn', { count: 'exact' })
+            .select('lat,lon,acc,alt,vel,batt,ssid,tag,topic,tid,tst,conn', { count: 'exact' })
             .gte('tst', startTimestamp)
             .lte('tst', endTimestamp)
             .order('tst', { ascending: true })
@@ -340,7 +340,7 @@ export default {
                       Altitude: \${loc.alt} meters<br>
                       Velocity: \${loc.vel !== null ? loc.vel : 0} km/h<br>
                       Battery: \${loc.batt}%<br>
-                      Wi-Fi: \${loc.SSID ? loc.SSID : 'Not connected'}<br>
+                      Wi-Fi: \${loc.ssid ? loc.ssid : 'Not connected'}<br>
                       Connectivity: \${getConnectivityLabel(loc.conn)}<br>
                       Tag: \${loc.tag || 'N/A'}<br>
                       Topic: \${loc.topic || 'N/A'}<br>
@@ -413,7 +413,7 @@ export default {
                 'Altitude: ' + latest.alt + ' meters<br>' +
                 'Velocity: ' + (latest.vel !== null ? latest.vel : 0) + ' km/h<br>' +
                 'Battery: ' + latest.batt + '%<br>' +
-                'Wi-Fi: ' + (latest.SSID ? latest.SSID : 'Not connected') + '<br>' +
+                'Wi-Fi: ' + (latest.ssid ? latest.ssid : 'Not connected') + '<br>' +
                 'Connectivity: ' + getConnectivityLabel(latest.conn) + '<br>' +
                 'Tag: ' + (latest.tag || 'N/A') + '<br>' +
                 'Topic: ' + (latest.topic || 'N/A') + '<br>' +
