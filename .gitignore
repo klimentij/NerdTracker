@@ -181,3 +181,6 @@ secrets.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+NerdTrackerCleanup/locations_*
+NerdTrackerCleanup/cleanup_report.txt
