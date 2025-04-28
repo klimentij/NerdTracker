@@ -5,4 +5,4 @@ compatibility_flags = ["nodejs_compat"]
 
 # Cron trigger schedule definition
 [triggers]
-crons = ["*/1 * * * *"] # every 1 minute (Cloudflare supports min 1 min)
+crons = ["*/5 * * * *"] # every 5 minutes (Cloudflare supports min 1 min)
