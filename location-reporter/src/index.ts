@@ -68,8 +68,46 @@ export default {
           const hours = Math.floor((secondsAgo % 86400) / 3600)
           humanAgo = `${days} days ${hours} hours ago`
         }
-        const lastTimestampMsg = `⚠️ Alert: Last location recorded: ${humanAgo} (epoch: ${lastTst})`
-        console.log(`[location-reporter] ${lastTimestampMsg}`) // Log the message being sent
+
+        // Helper function to escape MarkdownV2 characters
+        const escapeMdV2 = (str: string | number | null | undefined): string => {
+          if (str === null || str === undefined) return '';
+          // Escape characters: _ * [ ] ( ) ~ ` > # + - = | { } . !
+          return String(str).replace(/([_*[\]()~`>#+\-=|{}.!])/g, '\\$1');
+        };
+
+        // Extract details from the latest row
+        const lastRecord = latestRows[0]
+        const lat = lastRecord.lat
+        const lon = lastRecord.lon
+        const googleMapsLink = `https://www.google.com/maps?q=${lat},${lon}` // URL should NOT be escaped
+
+        // Build the details string, escaping values
+        let details = ''
+        if (lastRecord.acc !== null) details += `🎯 Accuracy: ${escapeMdV2(lastRecord.acc)}m\n`
+        if (lastRecord.vel !== null) details += `💨 Speed: ${escapeMdV2(lastRecord.vel)} km/h\n` // Assuming km/h
+        if (lastRecord.alt !== null) details += `⛰️ Altitude: ${escapeMdV2(lastRecord.alt)}m\n`
+        if (lastRecord.batt !== null) details += `🔋 Battery: ${escapeMdV2(lastRecord.batt)}%\n`
+        const connType = lastRecord.conn === 'w' ? 'WiFi' : lastRecord.conn === 'm' ? 'Mobile' : lastRecord.conn === 'o' ? 'Offline' : 'Unknown';
+        if (lastRecord.conn !== null) details += `📶 Connection: ${escapeMdV2(connType)}\n`
+        if (lastRecord.conn === 'w' && lastRecord.ssid) details += `📡 WiFi SSID: ${escapeMdV2(lastRecord.ssid)}\n`
+
+        // Escape the human-readable time ago string
+        const humanAgoEscaped = escapeMdV2(humanAgo);
+        
+        // Construct the final MarkdownV2 message
+        const lastTimestampMsg = 
+`⚠️ *NerdTracker Alert* ⚠️
+
+Last valid location recorded: *${humanAgoEscaped}*
+\\(Epoch: ${escapeMdV2(lastTst)}\\)
+
+📍 [View on Google Maps](${googleMapsLink})
+
+*Details:*
+${details}` // details already escaped
+
+        console.log(`[location-reporter] Alert Message Payload:\n${lastTimestampMsg}`) // Log the formatted message
 
         // Send message via Telegram Bot API
         const messageText = lastTimestampMsg
@@ -81,7 +119,8 @@ export default {
           body: JSON.stringify({
             chat_id: env.TELEGRAM_CHAT_ID,
             text: messageText,
-            parse_mode: 'HTML',
+            parse_mode: 'MarkdownV2', // Use MarkdownV2 for better formatting
+            disable_web_page_preview: true // Optional: disable link preview
           }),
         })
         if (!sendResp.ok) {
