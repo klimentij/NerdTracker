@@ -24,12 +24,24 @@ export default {
     // Initialize Supabase client
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY)
 
-    // Query the most recent row by id, then use tst
+    // Query the most recent row by id, then check tst in code
     const { data: latestRows, error: latestError } = await supabase
       .from(TABLE_NAME)
-      .select('tst')
-      .order('id', { ascending: false })
+      .select('*') // Changed from 'tst' to '*' like inserter
+      .not('tst', 'is', null) // Filter out rows where tst is NULL
+      .order('tst', { ascending: false }) // Changed from 'id' to 'tst' like inserter
       .limit(1)
+
+    // **DEBUG LOGGING**
+    console.log('[location-reporter] Supabase query results (no DB null filter):')
+    console.log(`  - Error: ${JSON.stringify(latestError)}`)
+    console.log(`  - Data: ${JSON.stringify(latestRows)}`)
+    if (latestRows && latestRows.length > 0) {
+      console.log(`  - First row: ${JSON.stringify(latestRows[0])}`)
+      console.log(`  - First row tst value: ${latestRows[0]?.tst}`)
+      console.log(`  - First row tst type: ${typeof latestRows[0]?.tst}`)
+    }
+    // **END DEBUG LOGGING**
 
     if (latestError) {
       console.error('[location-reporter] Error fetching latest timestamp:', latestError)
@@ -37,7 +49,7 @@ export default {
     }
 
     let lastTimestampMsg = 'No locations recorded yet.'
-    if (latestRows && latestRows.length > 0 && latestRows[0].tst) {
+    if (latestRows && latestRows.length > 0 && latestRows[0]?.tst) { // Check explicitly for existence/truthiness
       const lastTst = latestRows[0].tst
       const nowEpoch = Math.floor(Date.now() / 1000)
       const secondsAgo = nowEpoch - lastTst
