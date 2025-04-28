@@ -1,0 +1,19 @@
+{
+  "name": "location-reporter",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.44.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240722.0",
+    "typescript": "^5.5.2",
+    "wrangler": "^4.13.2"
+  }
+}

@@ -25,7 +25,8 @@
     - [5. Configure OwnTracks](#5-configure-owntracks)
     - [🔒 Security Notes](#-security-notes)
     - [Location Inserter Configuration](#location-inserter-configuration)
-  - [🆓 Free Tier Limits \& Scaling Considerations](#-free-tier-limits--scaling-considerations)
+    - [Location Reporter Configuration](#location-reporter-configuration)
+  - [🆓 Free Tier Limits & Scaling Considerations](#-free-tier-limits--scaling-considerations)
     - [Current Free Tier Limits (as of Nov 2024)](#current-free-tier-limits-as-of-nov-2024)
       - [Supabase Free Tier (View current limits)](#supabase-free-tier-view-current-limits)
       - [Cloudflare Workers Free Tier (View current limits)](#cloudflare-workers-free-tier-view-current-limits)
@@ -307,6 +308,16 @@ This feature is particularly useful for:
 - Reducing database size and costs
 - Cleaner location history
 - Better performance in the web interface
+
+### Location Reporter Configuration
+
+Follow these steps to configure and deploy the location-reporter worker:
+
+1. Copy `location-reporter/secrets.dist.json` to `location-reporter/secrets.json`.
+2. Fill in your Supabase credentials, your Telegram Bot Token (obtained from @BotFather), and your numeric Telegram Chat ID (you can get this from a bot like @userinfobot by sending `/start` to it).
+3. Install dependencies: `npm install --prefix location-reporter`.
+4. Generate Wrangler types: `npm run cf-typegen --prefix location-reporter`.
+5. Deploy: `npm run deploy --prefix location-reporter`.
 
 ## 🆓 Free Tier Limits & Scaling Considerations
 

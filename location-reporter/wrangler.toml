@@ -1,0 +1,8 @@
+name = "location-reporter"
+main = "src/index.ts"
+compatibility_date = "2024-07-22"
+compatibility_flags = ["nodejs_compat"]
+
+# Cron trigger schedule definition
+[triggers]
+crons = ["*/1 * * * *"] # every 1 minute (Cloudflare supports min 1 min)
