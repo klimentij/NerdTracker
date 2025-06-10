@@ -23,7 +23,7 @@ export default {
     return new Response('This worker only runs on schedule');
   },
 
-  async scheduled(_event: ScheduledEvent, env: Env): Promise<void> {
+  async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_KEY);
 
     const list = await env.HISTORY_BUCKET.list();
@@ -54,10 +54,11 @@ export default {
     }
 
     const json = JSON.stringify({ type: 'FeatureCollection', features: data });
-    const compressed = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+    const compressedStream = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+    const compressed = await new Response(compressedStream).arrayBuffer();
     const key = `${target.toISOString().slice(0, 7)}.json.gz`;
     await env.HISTORY_BUCKET.put(key, compressed, {
-      httpMetadata: { contentType: 'application/json' },
+      httpMetadata: { contentType: 'application/json', contentEncoding: 'gzip' },
     });
     console.log(`Wrote ${data.length} records to ${key}`);
   },
