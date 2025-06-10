@@ -4,7 +4,7 @@ compatibility_date = "2024-07-22"
 compatibility_flags = ["nodejs_compat"]
 
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["* * * * *"]
 
 [[r2_buckets]]
 binding = "HISTORY_BUCKET"
