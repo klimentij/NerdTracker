@@ -299,7 +299,7 @@ To keep your Supabase database small, you can offload older records to a Cloudfl
    npm run deploy --prefix track-aggregator
    ```
 
-This worker runs daily, exports the previous day's data from Supabase, compresses it to `YYYY-MM-DD.json.gz`, and stores it in your R2 bucket. The web interface will automatically serve these files when a large date range is requested.
+This worker runs every 10 minutes. On each run it checks if the previous month's archive exists in R2. If not, it exports that entire month of data from Supabase, saves it as `YYYY-MM.json.gz`, and uploads it to R2. Once the previous month exists, it will keep moving backwards month by month until all history is archived. The web interface will automatically stream these monthly files when a large date range is requested.
 
 ### 🔒 Security Notes
 - Store all passwords from setup.py output securely

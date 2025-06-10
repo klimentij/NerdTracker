@@ -85,13 +85,18 @@ export default {
         const startTimestamp = Math.floor(start.getTime() / 1000);
         const endTimestamp = Math.floor(end.getTime() / 1000);
 
-        const diffDays = Math.floor((endTimestamp - startTimestamp) / 86400);
+        const startMonth = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+        const endMonth = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
+        const diffMonths =
+          endMonth.getUTCFullYear() * 12 + endMonth.getUTCMonth() -
+          (startMonth.getUTCFullYear() * 12 + startMonth.getUTCMonth());
         let fetchedFromR2 = false;
-        if (diffDays >= 1) {
-          const daysData: any[] = [];
-          for (let t = startTimestamp; t <= endTimestamp; t += 86400) {
-            const day = new Date(t * 1000).toISOString().slice(0, 10);
-            const obj = await env.HISTORY_BUCKET.get(`${day}.json.gz`);
+        if (diffMonths >= 0) {
+          const monthsData: any[] = [];
+          const cur = new Date(startMonth);
+          for (let i = 0; i <= diffMonths; i++) {
+            const key = `${cur.toISOString().slice(0, 7)}.json.gz`;
+            const obj = await env.HISTORY_BUCKET.get(key);
             if (!obj) {
               fetchedFromR2 = false;
               break;
@@ -100,11 +105,14 @@ export default {
             const text = await new Response(decompressed).text();
             const parsed = JSON.parse(text);
             const features = parsed.features ?? parsed;
-            daysData.push(...features);
+            monthsData.push(...features);
             fetchedFromR2 = true;
+            cur.setUTCMonth(cur.getUTCMonth() + 1);
           }
           if (fetchedFromR2) {
-            allData = daysData;
+            allData = monthsData.filter(
+              (f: any) => f.tst >= startTimestamp && f.tst <= endTimestamp
+            );
           }
         }
 
