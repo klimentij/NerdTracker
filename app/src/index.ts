@@ -9,6 +9,7 @@ export interface Env {
   AUTH_PASSWORD: string;
   JWT_SECRET: string;
   MAGIC_LINK_SECRET: string; // Add this line
+  HISTORY_BUCKET: R2Bucket;
 }
 
 export default {
@@ -84,7 +85,31 @@ export default {
         const startTimestamp = Math.floor(start.getTime() / 1000);
         const endTimestamp = Math.floor(end.getTime() / 1000);
 
-        console.log(`Querying Supabase for tst range: ${startTimestamp} to ${endTimestamp}`);
+        const diffDays = Math.floor((endTimestamp - startTimestamp) / 86400);
+        let fetchedFromR2 = false;
+        if (diffDays >= 1) {
+          const daysData: any[] = [];
+          for (let t = startTimestamp; t <= endTimestamp; t += 86400) {
+            const day = new Date(t * 1000).toISOString().slice(0, 10);
+            const obj = await env.HISTORY_BUCKET.get(`${day}.json.gz`);
+            if (!obj) {
+              fetchedFromR2 = false;
+              break;
+            }
+            const decompressed = obj.body?.pipeThrough(new DecompressionStream('gzip'));
+            const text = await new Response(decompressed).text();
+            const parsed = JSON.parse(text);
+            const features = parsed.features ?? parsed;
+            daysData.push(...features);
+            fetchedFromR2 = true;
+          }
+          if (fetchedFromR2) {
+            allData = daysData;
+          }
+        }
+
+        if (!fetchedFromR2) {
+          console.log(`Querying Supabase for tst range: ${startTimestamp} to ${endTimestamp}`);
 
         let page = 0;
         const pageSize = 100000;
@@ -116,6 +141,7 @@ export default {
         }
 
         console.log(`Total fetched records: ${allData.length}`);
+      }
       } catch (e) {
         console.error('Error in date processing or Supabase query:', e);
         error = e;
@@ -575,7 +601,7 @@ function isAuthenticated(authHeader: string, env: Env): boolean {
   return username === env.AUTH_USERNAME && password === env.AUTH_PASSWORD;
 }
 
-function generateToken(secret: string): string {
+export function generateToken(secret: string): string {
   // In a real-world scenario, use a proper JWT library
   // This is a simplified example
   const payload = {
@@ -584,7 +610,7 @@ function generateToken(secret: string): string {
   return btoa(JSON.stringify(payload)) + '.' + btoa(secret);
 }
 
-function isValidToken(token: string, secret: string): boolean {
+export function isValidToken(token: string, secret: string): boolean {
   // In a real-world scenario, use a proper JWT library
   // This is a simplified example
   const [payloadBase64] = token.split('.');

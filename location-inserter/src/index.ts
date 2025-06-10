@@ -169,7 +169,7 @@ function isValidBasicAuth(authHeader: string, env: Env): boolean {
 	return username === env.AUTH_USER && password === env.AUTH_PASS;
 }
 
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
 	// Ensure all inputs are numbers
 	const numLat1 = Number(lat1);
 	const numLon1 = Number(lon1);

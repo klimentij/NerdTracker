@@ -1,0 +1,11 @@
+name = "track-aggregator"
+main = "src/index.ts"
+compatibility_date = "2024-07-22"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["0 1 * * *"]
+
+[[r2_buckets]]
+binding = "HISTORY_BUCKET"
+bucket_name = "history-bucket"

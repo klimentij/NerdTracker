@@ -23,6 +23,7 @@
     - [3. Application Configuration](#3-application-configuration)
     - [4. Deploy Services](#4-deploy-services)
     - [5. Configure OwnTracks](#5-configure-owntracks)
+    - [6. R2 History Bucket & Track Aggregator](#6-r2-history-bucket--track-aggregator)
     - [🔒 Security Notes](#-security-notes)
     - [Location Inserter Configuration](#location-inserter-configuration)
     - [Location Reporter Configuration](#location-reporter-configuration)
@@ -277,6 +278,28 @@ NerdTracker is an open-source solution for digital nomads and location tracking 
    ```
 
 For more details on location tracking parameters, see the [OwnTracks Documentation](https://owntracks.org/booklet/features/location/).
+
+### 6. R2 History Bucket & Track Aggregator
+
+To keep your Supabase database small, you can offload older records to a Cloudflare R2 bucket.
+
+1. Create an R2 bucket named `history-bucket` in your Cloudflare dashboard.
+2. Add the bucket binding to `app/wrangler.toml` and `track-aggregator/wrangler.toml`:
+
+   ```toml
+   [[r2_buckets]]
+   binding = "HISTORY_BUCKET"
+   bucket_name = "history-bucket"
+   ```
+
+3. Deploy the scheduled `track-aggregator` worker:
+
+   ```bash
+   npm install --prefix track-aggregator
+   npm run deploy --prefix track-aggregator
+   ```
+
+This worker runs daily, exports the previous day's data from Supabase, compresses it to `YYYY-MM-DD.json.gz`, and stores it in your R2 bucket. The web interface will automatically serve these files when a large date range is requested.
 
 ### 🔒 Security Notes
 - Store all passwords from setup.py output securely
