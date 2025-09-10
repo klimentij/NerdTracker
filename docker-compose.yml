@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-nerdtracker}
+    volumes:
+      - ${DB_DATA_LOCATION}:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - nerdtracker
+    restart: unless-stopped
+
+  postgrest:
+    image: postgrest/postgrest
+    environment:
+      - PGRST_DB_URI=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-nerdtracker}
+      - PGRST_SERVER_PORT=${PGRST_SERVER_PORT:-5480}
+      - PGRST_DB_SCHEMA=public
+      - PGRST_DB_ANON_ROLE=postgres
+      - PGRST_JWT_SECRET=abcdefghijklmnopqrstuvwxyz123456
+      - PGRST_LOG_LEVEL=error
+    depends_on:
+      - postgres
+    networks:
+      - nerdtracker
+    restart: unless-stopped
+
+  postgrest_proxy:
+    image: nginx:alpine
+    networks:
+      - nerdtracker
+    depends_on:
+      - postgrest
+    command: >
+      sh -c "echo '
+      events {}
+      http {
+        server {
+          listen 5481;
+          location /rest/v1/ {
+            proxy_pass http://postgrest:5480/;
+          }
+        }
+      }' > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
+    restart: unless-stopped
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_PORT:-3000}:8787"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - WRANGLER_SEND_METRICS=false
+      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:5480}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD=${AUTH_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - MAGIC_LINK_SECRET=${MAGIC_LINK_SECRET}
+    depends_on:
+      - postgrest
+    networks:
+      - nerdtracker
+    restart: unless-stopped
+
+  location-inserter:
+    build:
+      context: ./location-inserter
+      dockerfile: Dockerfile
+    ports:
+      - "${LOCATION_INSERTER_PORT:-3001}:8787"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - WRANGLER_SEND_METRICS=false
+      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:5480}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - AUTH_USER=${AUTH_USER}
+      - AUTH_PASS=${AUTH_PASS}
+    depends_on:
+      - postgrest
+    networks:
+      - nerdtracker
+    restart: unless-stopped
+
+  location-reporter:
+    build:
+      context: ./location-reporter
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - WRANGLER_SEND_METRICS=false
+      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:5480}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    depends_on:
+      - postgrest
+    networks:
+      - nerdtracker
+    restart: unless-stopped
+
+networks:
+  nerdtracker:
+    name: nerdtracker
+    internal: false
+    ipam:
+      driver: default
