@@ -52,14 +52,6 @@ alter table locations enable row level security;
 -- Drop existing policy if it exists
 drop policy if exists "Enable insert access for all users" on "public"."locations";
 
--- Compatibility for self-hosted PostgreSQL
-DO $$
-BEGIN
-CREATE ROLE anon;
-EXCEPTION WHEN duplicate_object THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;
-END
-$$;
-
 -- Create policy for anonymous users to insert
 create policy "Enable insert access for all users"
 on "public"."locations"
