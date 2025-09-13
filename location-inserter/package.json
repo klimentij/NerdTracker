@@ -7,6 +7,7 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",
+    "test:node": "vitest --config vitest.node.config.mts run",
     "cf-typegen": "wrangler types"
   },
   "devDependencies": {
