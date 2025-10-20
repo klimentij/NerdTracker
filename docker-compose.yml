@@ -38,9 +38,9 @@ services:
       events {}
       http {
         server {
-          listen 5481;
+          listen ${SUPABASE_PORT};
           location /rest/v1/ {
-            proxy_pass http://postgrest:5480/;
+            proxy_pass http://postgrest:${PGRST_SERVER_PORT}/;
           }
         }
       }' > /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
@@ -55,7 +55,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - WRANGLER_SEND_METRICS=false
-      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:5480}
+      - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - AUTH_USERNAME=${AUTH_USERNAME}
       - AUTH_PASSWORD=${AUTH_PASSWORD}
@@ -76,7 +76,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - WRANGLER_SEND_METRICS=false
-      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:5480}
+      - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - AUTH_USER=${AUTH_USER}
       - AUTH_PASS=${AUTH_PASS}
@@ -93,7 +93,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - WRANGLER_SEND_METRICS=false
-      - SUPABASE_URL=${SUPABASE_URL:-http://postgrest:5480}
+      - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_KEY=${SUPABASE_KEY}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
