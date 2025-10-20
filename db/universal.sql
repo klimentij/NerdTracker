@@ -107,11 +107,6 @@ BEGIN
             IF latest_close IS NULL
             THEN
                 latest_close := rec;
-            ELSE
-                IF rec.created_at > latest_close.created_at
-                THEN
-                    latest_close := rec;
-                END IF;
             END IF;
         END IF;
     END LOOP;
