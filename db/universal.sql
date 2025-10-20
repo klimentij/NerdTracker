@@ -82,9 +82,12 @@ DECLARE
     MIN_WITHIN_RANGE CONSTANT INT := 5;
 
     rec locations;
-    latest_close locations;
+    most_recent_rec locations;
     result locations;
     within_range_cnt INT := 0;
+    is_recent_location_in_range BOOLEAN := FALSE;
+
+    is_close BOOLEAN;
 BEGIN
     -- Select the last LAST_LOCATIONS_COUNT locations from the locations table
     -- Filter out NULL lat/lon records
@@ -98,16 +101,22 @@ BEGIN
         ORDER BY tst DESC
         LIMIT RECENT_LOCATIONS_LIMIT
     LOOP
-        IF earth_distance(
+        is_close := earth_distance(
             ll_to_earth(NEW.lat, NEW.lon),
             ll_to_earth(rec.lat, rec.lon)
-        ) < MAX_PROXIMITY_METERS
+        ) < MAX_PROXIMITY_METERS;
+
+        -- Count all recent records that are within proximity
+        IF is_close
         THEN
             within_range_cnt := within_range_cnt + 1;
-            IF latest_close IS NULL
-            THEN
-                latest_close := rec;
-            END IF;
+        END IF;
+
+        -- For the first (most recent) record only: record if it's within range
+        IF most_recent_rec IS NULL
+        THEN
+            is_recent_location_in_range := is_close;
+            most_recent_rec := rec;
         END IF;
     END LOOP;
 
@@ -115,12 +124,12 @@ BEGIN
     -- 1. The most recent location must be valid (non-null lat/lon)
     -- 2. The most recent location must be within range
     -- 3. At least MIN_WITHIN_RANGE locations must be within the hangout distance
-    IF within_range_cnt >= MIN_WITHIN_RANGE
+    IF is_recent_location_in_range AND (within_range_cnt >= MIN_WITHIN_RANGE)
     THEN
-        NEW.id := latest_close.id;
+        NEW.id := most_recent_rec.id;
 
         DELETE FROM locations
-        WHERE id = latest_close.id;
+        WHERE id = most_recent_rec.id;
 
         INSERT INTO locations
         SELECT NEW.*
