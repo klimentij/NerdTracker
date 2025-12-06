@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
+from math import radians, sin, cos, atan2, sqrt
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
@@ -19,6 +20,7 @@ FLIGHT_MIN_DISTANCE_KM = 50.0
 FLIGHT_MIN_DURATION_MIN = 10.0
 FLIGHT_MAX_GAP_HOURS = 12.0
 DEFAULT_OUTLIER_KM = 50.0
+COORD_PRECISION = 5  # ~1m precision, saves lots of space
 
 
 def parse_project_ref(url: str) -> str:
@@ -218,6 +220,7 @@ def build_track_segments(
     point_features: Sequence[Dict[str, object]],
     max_gap_hours: float,
     forbidden_intervals: List[Tuple[int, int]] | None = None,
+    epsilon_km: float = 0.1,
 ) -> List[Dict[str, object]]:
     # Build line segments ordered by timestamp.
     # Split if gap > max_gap_hours OR gap overlaps a forbidden interval (flight).
@@ -292,10 +295,23 @@ def build_track_segments(
         if len(seg) < 2:
             continue
 
-        coords = [pt["geometry"]["coordinates"] for pt in seg]
+        # Extract and round coordinates
+        coords = [
+            [round_coord(pt["geometry"]["coordinates"][0]), 
+             round_coord(pt["geometry"]["coordinates"][1])]
+            for pt in seg
+        ]
+        
+        # Apply RDP simplification
+        coords = simplify_line_rdp(coords, epsilon_km=epsilon_km)
+        
+        if len(coords) < 2:
+            continue
+            
         start_ts = seg[0]["properties"].get("tst")
         end_ts = seg[-1]["properties"].get("tst")
 
+        # Minimal properties for tracks
         line_features.append(
             {
                 "type": "Feature",
@@ -303,9 +319,6 @@ def build_track_segments(
                 "properties": {
                     "start_ts": start_ts,
                     "end_ts": end_ts,
-                    "count": len(seg),
-                    # Inherit tag from first point?
-                    "tag": seg[0]["properties"].get("tag"),
                 },
             }
         )
@@ -380,14 +393,74 @@ def filter_isolated_points(
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    from math import radians, sin, cos, atan2, sqrt
-
     r = 6371.0
     dlat = radians(lat2 - lat1)
     dlon = radians(lon2 - lon1)
     a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return r * c
+
+
+def round_coord(val: float, precision: int = COORD_PRECISION) -> float:
+    """Round coordinate to save space. 5 decimals = ~1m precision."""
+    return round(val, precision)
+
+
+def perpendicular_distance_km(
+    point: Tuple[float, float],
+    line_start: Tuple[float, float],
+    line_end: Tuple[float, float],
+) -> float:
+    """Approximate perpendicular distance from point to line segment in km."""
+    # For small distances, use simple planar approximation
+    x0, y0 = point  # lon, lat
+    x1, y1 = line_start
+    x2, y2 = line_end
+    
+    # Handle degenerate case
+    if x1 == x2 and y1 == y2:
+        return haversine_km(y0, x0, y1, x1)
+    
+    # Planar perpendicular distance (good enough for simplification)
+    num = abs((y2 - y1) * x0 - (x2 - x1) * y0 + x2 * y1 - y2 * x1)
+    den = sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2)
+    if den == 0:
+        return 0.0
+    
+    # Convert degrees to approximate km (rough: 1 degree ~ 111km at equator)
+    return (num / den) * 111.0
+
+
+def simplify_line_rdp(
+    coords: List[List[float]],
+    epsilon_km: float = 0.1,  # 100m default tolerance
+) -> List[List[float]]:
+    """Ramer-Douglas-Peucker line simplification algorithm."""
+    if len(coords) < 3:
+        return coords
+    
+    # Find point with max distance from line between first and last
+    start, end = coords[0], coords[-1]
+    max_dist = 0.0
+    max_idx = 0
+    
+    for i in range(1, len(coords) - 1):
+        dist = perpendicular_distance_km(
+            (coords[i][0], coords[i][1]),
+            (start[0], start[1]),
+            (end[0], end[1]),
+        )
+        if dist > max_dist:
+            max_dist = dist
+            max_idx = i
+    
+    # If max distance > epsilon, recursively simplify
+    if max_dist > epsilon_km:
+        left = simplify_line_rdp(coords[: max_idx + 1], epsilon_km)
+        right = simplify_line_rdp(coords[max_idx:], epsilon_km)
+        return left[:-1] + right
+    else:
+        return [start, end]
 
 
 def detect_flights(
@@ -457,21 +530,29 @@ def detect_flights(
         if total_dist < min_distance_km or duration_min < min_duration_min:
             continue
 
+        # Round coordinates and simplify flight paths
+        coords = [
+            [round_coord(pt["geometry"]["coordinates"][0]),
+             round_coord(pt["geometry"]["coordinates"][1])]
+            for pt in seg
+        ]
+        coords = simplify_line_rdp(coords, epsilon_km=1.0)  # 1km tolerance for flights
+        
+        if len(coords) < 2:
+            continue
+
         flight_features.append(
             {
                 "type": "Feature",
                 "geometry": {
                     "type": "LineString",
-                    "coordinates": [pt["geometry"]["coordinates"] for pt in seg],
+                    "coordinates": coords,
                 },
                 "properties": {
                     "start_ts": start_ts,
                     "end_ts": end_ts,
-                    "dist_km": round(total_dist, 2),
-                    "duration_min": round(duration_min, 1),
-                    "tag": seg[0]["properties"].get("tag"),
-                    "topic": seg[0]["properties"].get("topic"),
-                    "count": len(seg),
+                    "dist_km": round(total_dist, 0),  # integer km
+                    "duration_min": round(duration_min, 0),  # integer minutes
                 },
             }
         )
@@ -509,20 +590,17 @@ def build_pmtiles(
         "--force",
         "--minimum-zoom=0",
         f"--maximum-zoom={max_zoom}",
+        # Aggressive size optimization
         "--drop-densest-as-needed",
+        "--coalesce-densest-as-needed",
+        "--simplify-only-low-zooms",
+        "--no-tile-compression",  # PMTiles handles compression
     ]
 
-    # Include all metadata fields we attach to points/lines.
+    # Minimal metadata - only what we actually use
     includes = [
-        "id",
-        "tst",
-        "tag",
-        "topic",
-        "vel",
-        "alt",
         "start_ts",
         "end_ts",
-        "count",
         "dist_km",
         "duration_min",
     ]
@@ -575,8 +653,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-zoom",
         type=int,
-        default=14,
-        help="Highest zoom level for tippecanoe (default: 14).",
+        default=10,
+        help="Highest zoom level for tippecanoe (default: 10, lower = smaller file).",
     )
     parser.add_argument(
         "--tippecanoe-bin",
@@ -614,54 +692,85 @@ def parse_args() -> argparse.Namespace:
         help="Skip points from tracks if they are farther than this from both neighbors and slow (default: 50km).",
     )
     parser.add_argument(
+        "--simplify-km",
+        type=float,
+        default=0.1,
+        help="Line simplification tolerance in km (default: 0.1 = 100m). Higher = smaller file.",
+    )
+    parser.add_argument(
         "--keep-geojson",
         action="store_true",
         help="Keep the intermediate GeoJSON instead of deleting it.",
+    )
+    parser.add_argument(
+        "--force-refetch",
+        action="store_true",
+        help="Force refetch from database even if cached GeoJSON exists.",
+    )
+    parser.add_argument(
+        "--include-locations",
+        action="store_true",
+        help="Include raw locations layer (significantly increases file size).",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    supabase_url, db_password, pooler_host = load_config(args)
-    project_ref = parse_project_ref(supabase_url)
     
-    if args.all_time:
-        cutoff = 0
-    else:
-        cutoff = int((datetime.now(timezone.utc) - timedelta(days=args.days)).timestamp())
-
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     geojson_dir = output_dir / "geojson"
     geojson_dir.mkdir(parents=True, exist_ok=True)
-    base_name = f"locations_last_{args.days}d"
-    points_geojson_path = geojson_dir / f"{base_name}_points.geojson"
-    lines_geojson_path = geojson_dir / f"{base_name}_track.geojson"
-    track_tags_geojson_path = geojson_dir / f"{base_name}_track_tags.geojson"
-    track_topics_geojson_path = geojson_dir / f"{base_name}_track_topics.geojson"
+    
+    base_name = "locations_all" if args.all_time else f"locations_last_{args.days}d"
+    raw_cache_path = geojson_dir / f"{base_name}_raw.json"
     flights_geojson_path = geojson_dir / f"{base_name}_flights.geojson"
+    points_geojson_path = geojson_dir / f"{base_name}_points.geojson"
     pmtiles_path = output_dir / f"{base_name}.pmtiles"
 
-    dsn = build_dsn(project_ref, db_password, pooler_host, args.port)
+    # Check cache first
+    features = None
+    if raw_cache_path.exists() and not args.force_refetch:
+        print(f"Using cached data from {raw_cache_path}")
+        print("  (use --force-refetch to re-download)")
+        cached = json.loads(raw_cache_path.read_text())
+        features = cached.get("features", [])
+        print(f"Loaded {len(features)} cached features")
+    
+    if features is None:
+        supabase_url, db_password, pooler_host = load_config(args)
+        project_ref = parse_project_ref(supabase_url)
+        
+        if args.all_time:
+            cutoff = 0
+        else:
+            cutoff = int((datetime.now(timezone.utc) - timedelta(days=args.days)).timestamp())
 
-    print(f"Connecting to {pooler_host} as project {project_ref}...")
-    print(f"Running query for the last {args.days} days (may take up to the statement timeout)...")
-    rows = fetch_locations(dsn, cutoff)
-    if not rows:
-        raise SystemExit("No rows returned for the requested window.")
+        dsn = build_dsn(project_ref, db_password, pooler_host, args.port)
 
-    print(f"Fetched {len(rows)} rows. Building GeoJSON...")
-    features = features_from_rows(rows)
-    write_geojson(points_geojson_path, features)
-    print(f"Wrote point GeoJSON to {points_geojson_path}")
+        print(f"Connecting to {pooler_host} as project {project_ref}...")
+        time_desc = "all time" if args.all_time else f"last {args.days} days"
+        print(f"Running query for {time_desc} (may take up to the statement timeout)...")
+        rows = fetch_locations(dsn, cutoff)
+        if not rows:
+            raise SystemExit("No rows returned for the requested window.")
 
+        print(f"Fetched {len(rows)} rows. Building features...")
+        features = features_from_rows(rows)
+        
+        # Cache raw features for future runs
+        write_geojson(raw_cache_path, features)
+        print(f"Cached raw data to {raw_cache_path}")
+
+    # Filter outliers
     filtered_for_lines = filter_isolated_points(
         features,
         drop_km=args.outlier_km,
         max_keep_speed_kmh=FLIGHT_SPEED_THRESHOLD_KMH * 0.5,
     )
 
+    # Detect flights
     flight_features = detect_flights(
         filtered_for_lines,
         speed_threshold_kmh=FLIGHT_SPEED_THRESHOLD_KMH,
@@ -670,7 +779,7 @@ def main() -> None:
         max_gap_hours=args.flight_gap_hours,
     )
     write_geojson(flights_geojson_path, flight_features)
-    print(f"Wrote flights GeoJSON to {flights_geojson_path} ({len(flight_features)} segments)")
+    print(f"Wrote flights GeoJSON ({len(flight_features)} segments)")
 
     # Build flight intervals for splitting
     flight_intervals = []
@@ -688,45 +797,71 @@ def main() -> None:
     from collections import defaultdict
     points_by_group = defaultdict(list)
     for pt in filtered_for_tracks:
-        # Use topic as the primary grouper, fallback to tag, then 'unknown'
         t = pt["properties"].get("topic") or pt["properties"].get("tag") or "unknown"
         points_by_group[t].append(pt)
 
     track_layers = []
+    total_original_points = 0
+    total_simplified_points = 0
     
-    print(f"Building tracks for {len(points_by_group)} topics...")
+    print(f"Building tracks for {len(points_by_group)} topics (simplify={args.simplify_km}km)...")
     
-    # Process each group
     for group_name, pts in points_by_group.items():
-        # Sanitize name for filename
         safe_name = "".join(x for x in group_name if x.isalnum() or x in "._- ")
         if not safe_name: 
             safe_name = "track" 
             
-        # Lines logic
         lines = build_track_segments(
             pts, 
             max_gap_hours=24*30, 
-            forbidden_intervals=flight_intervals
+            forbidden_intervals=flight_intervals,
+            epsilon_km=args.simplify_km,
         )
         
         if not lines:
             continue
+        
+        # Count points for stats
+        total_original_points += len(pts)
+        for line in lines:
+            total_simplified_points += len(line["geometry"]["coordinates"])
             
         layer_name = group_name 
         path = geojson_dir / f"track_{safe_name}.geojson"
         write_geojson(path, lines)
         track_layers.append((layer_name, path))
 
+    if total_original_points > 0:
+        reduction = (1 - total_simplified_points / total_original_points) * 100
+        print(f"Simplified: {total_original_points} -> {total_simplified_points} points ({reduction:.1f}% reduction)")
+
     tippecanoe_bin = ensure_tippecanoe(args.tippecanoe_bin)
     print("Running tippecanoe to generate PMTiles...")
     
-    layers = [
-        ("locations", points_geojson_path),
-        ("flights", flights_geojson_path),
-    ]
-    # Add track layers
+    layers = [("flights", flights_geojson_path)]
     layers.extend(track_layers)
+    
+    # Optionally include locations layer (significantly increases size)
+    if args.include_locations:
+        # Write minimal points for locations layer
+        minimal_points = []
+        for f in features:
+            minimal_points.append({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [
+                        round_coord(f["geometry"]["coordinates"][0]),
+                        round_coord(f["geometry"]["coordinates"][1]),
+                    ]
+                },
+                "properties": {
+                    "tst": f["properties"].get("tst"),
+                }
+            })
+        write_geojson(points_geojson_path, minimal_points)
+        layers.insert(0, ("locations", points_geojson_path))
+        print("Including locations layer (--include-locations)")
     
     build_pmtiles(
         tippecanoe_bin,
@@ -734,19 +869,20 @@ def main() -> None:
         pmtiles_path=pmtiles_path,
         max_zoom=args.max_zoom,
     )
-    print(f"PMTiles written to {pmtiles_path}")
+    
+    # Report file size
+    size_mb = pmtiles_path.stat().st_size / (1024 * 1024)
+    print(f"PMTiles written to {pmtiles_path} ({size_mb:.2f} MB)")
 
     if not args.keep_geojson:
-        if points_geojson_path.exists():
-            points_geojson_path.unlink()
         if flights_geojson_path.exists():
             flights_geojson_path.unlink()
+        if points_geojson_path.exists():
+            points_geojson_path.unlink()
         for _, path in track_layers:
             if path.exists():
                 path.unlink()
-        if flights_geojson_path.exists():
-            flights_geojson_path.unlink()
-        print("Cleaned up intermediate GeoJSON.")
+        print("Cleaned up intermediate GeoJSON (raw cache kept).")
 
 
 if __name__ == "__main__":
