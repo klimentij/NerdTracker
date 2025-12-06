@@ -7,7 +7,7 @@ Fetch the past week of rows from the Supabase `locations` table and turn them in
 ```bash
 uv run pmtiles-last-week \
   --secrets app/secrets.json \
-  --output-dir experiments/pmtiles_last_week/output
+  --output-dir output
 ```
 
 Required inputs:
@@ -20,10 +20,11 @@ Flags:
 - `--keep-geojson` keeps the intermediate GeoJSON instead of deleting it after tile generation.
 - `--gap-hours` (default 3) splits line segments when there’s a big time gap to avoid long jumps.
 - `--flight-gap-hours` (default 12) allows flight detection to bridge sparse points within this time window.
+- `--outlier-km` (default 50) removes isolated, slow points from track/flight building to avoid stray spikes.
 
 Notes:
-- Outputs always land in `experiments/pmtiles_last_week/output` with names based on the window, e.g. `locations_last_30d.pmtiles` and matching GeoJSON filenames.
-- For the last 3 months: `uv run pmtiles-last-week --days 90 --secrets app/secrets.json --output-dir experiments/pmtiles_last_week/output --keep-geojson` (keeping GeoJSON is handy for debugging).
+- Outputs now live under `output`, with GeoJSON in `output/geojson` and filenames keyed by window, e.g. `locations_last_30d.pmtiles`.
+- For the last 3 months: `uv run pmtiles-last-week --days 90 --secrets app/secrets.json --output-dir output --keep-geojson` (keeping GeoJSON is handy for debugging).
 - The PMTiles now has multiple layers:
   - `locations`: all points with metadata preserved.
   - `track_tags`: LineStrings ordered by time per `tag`, split by gaps.

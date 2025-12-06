@@ -18,6 +18,7 @@ FLIGHT_SPEED_THRESHOLD_KMH = 200.0
 FLIGHT_MIN_DISTANCE_KM = 50.0
 FLIGHT_MIN_DURATION_MIN = 10.0
 FLIGHT_MAX_GAP_HOURS = 12.0
+DEFAULT_OUTLIER_KM = 50.0
 
 
 def parse_project_ref(url: str) -> str:
@@ -285,6 +286,51 @@ def build_grouped_tracks(
     return lines
 
 
+def filter_isolated_points(
+    point_features: Sequence[Dict[str, object]],
+    drop_km: float,
+    max_keep_speed_kmh: float,
+) -> List[Dict[str, object]]:
+    """Remove outlier points that are far from both neighbors and slow (likely GPS spikes)."""
+    if drop_km <= 0:
+        return list(point_features)
+
+    pts = sorted(point_features, key=lambda f: f["properties"].get("tst") or 0)
+    if len(pts) < 3:
+        return pts
+
+    def dist(a: Dict[str, object], b: Dict[str, object]) -> float:
+        ca, cb = a["geometry"]["coordinates"], b["geometry"]["coordinates"]
+        return haversine_km(ca[1], ca[0], cb[1], cb[0])
+
+    kept: List[Dict[str, object]] = [pts[0]]
+    for i in range(1, len(pts) - 1):
+        prev_pt, pt, next_pt = pts[i - 1], pts[i], pts[i + 1]
+        prev_dist = dist(prev_pt, pt)
+        next_dist = dist(pt, next_pt)
+
+        def speed(a: Dict[str, object], b: Dict[str, object]) -> float:
+            t1, t2 = a["properties"].get("tst"), b["properties"].get("tst")
+            if t1 is None or t2 is None:
+                return 0.0
+            dt_hr = (t2 - t1) / 3600.0
+            if dt_hr <= 0:
+                return 0.0
+            return dist(a, b) / dt_hr
+
+        prev_speed = speed(prev_pt, pt)
+        next_speed = speed(pt, next_pt)
+
+        if prev_dist > drop_km and next_dist > drop_km and max(prev_speed, next_speed) < max_keep_speed_kmh:
+            # Drop this isolated, slow point from line building.
+            continue
+
+        kept.append(pt)
+
+    kept.append(pts[-1])
+    return kept
+
+
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     from math import radians, sin, cos, atan2, sqrt
 
@@ -302,11 +348,12 @@ def detect_flights(
     min_distance_km: float,
     min_duration_min: float,
     max_gap_hours: float,
-) -> List[Dict[str, object]]:
+) -> Tuple[List[Dict[str, object]], set[int]]:
     # Simple heuristic: consecutive points with speed above threshold form a flight segment.
     pts = sorted(point_features, key=lambda f: f["properties"].get("tst") or 0)
     flights: List[List[Dict[str, object]]] = []
     current: List[Dict[str, object]] = []
+    flight_point_obj_ids: set[int] = set()
 
     for i in range(1, len(pts)):
         p1 = pts[i - 1]
@@ -330,7 +377,9 @@ def detect_flights(
         if is_flight:
             if not current:
                 current.append(p1)
+                flight_point_obj_ids.add(id(p1))
             current.append(p2)
+            flight_point_obj_ids.add(id(p2))
         else:
             if current:
                 flights.append(current)
@@ -378,7 +427,7 @@ def detect_flights(
             }
         )
 
-    return flight_features
+    return flight_features, flight_point_obj_ids
 
 
 def write_geojson(path: Path, features: List[Dict[str, object]]) -> None:
@@ -521,8 +570,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="experiments/pmtiles_last_week/output",
-        help="Directory to write outputs (defaults to experiments/pmtiles_last_week/output).",
+        default="output",
+        help="Directory to write outputs (defaults to ./output).",
     )
     parser.add_argument(
         "--gap-hours",
@@ -535,6 +584,12 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=FLIGHT_MAX_GAP_HOURS,
         help="Treat jumps within this many hours as flights even if points are sparse (default: 12).",
+    )
+    parser.add_argument(
+        "--outlier-km",
+        type=float,
+        default=DEFAULT_OUTLIER_KM,
+        help="Skip points from tracks if they are farther than this from both neighbors and slow (default: 50km).",
     )
     parser.add_argument(
         "--keep-geojson",
@@ -552,12 +607,14 @@ def main() -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    geojson_dir = output_dir / "geojson"
+    geojson_dir.mkdir(parents=True, exist_ok=True)
     base_name = f"locations_last_{args.days}d"
-    points_geojson_path = output_dir / f"{base_name}_points.geojson"
-    lines_geojson_path = output_dir / f"{base_name}_track.geojson"
-    track_tags_geojson_path = output_dir / f"{base_name}_track_tags.geojson"
-    track_topics_geojson_path = output_dir / f"{base_name}_track_topics.geojson"
-    flights_geojson_path = output_dir / f"{base_name}_flights.geojson"
+    points_geojson_path = geojson_dir / f"{base_name}_points.geojson"
+    lines_geojson_path = geojson_dir / f"{base_name}_track.geojson"
+    track_tags_geojson_path = geojson_dir / f"{base_name}_track_tags.geojson"
+    track_topics_geojson_path = geojson_dir / f"{base_name}_track_topics.geojson"
+    flights_geojson_path = geojson_dir / f"{base_name}_flights.geojson"
     pmtiles_path = output_dir / f"{base_name}.pmtiles"
 
     dsn = build_dsn(project_ref, db_password, pooler_host, args.port)
@@ -573,20 +630,14 @@ def main() -> None:
     write_geojson(points_geojson_path, features)
     print(f"Wrote point GeoJSON to {points_geojson_path}")
 
-    line_features = build_track_segments(features, args.gap_hours)
-    write_geojson(lines_geojson_path, line_features)
-    print(f"Wrote line GeoJSON to {lines_geojson_path} ({len(line_features)} segments)")
-
-    tag_tracks = build_grouped_tracks(features, "tag", args.gap_hours)
-    write_geojson(track_tags_geojson_path, tag_tracks)
-    print(f"Wrote tag tracks GeoJSON to {track_tags_geojson_path} ({len(tag_tracks)} segments)")
-
-    topic_tracks = build_grouped_tracks(features, "topic", args.gap_hours)
-    write_geojson(track_topics_geojson_path, topic_tracks)
-    print(f"Wrote topic tracks GeoJSON to {track_topics_geojson_path} ({len(topic_tracks)} segments)")
-
-    flight_features = detect_flights(
+    filtered_for_lines = filter_isolated_points(
         features,
+        drop_km=args.outlier_km,
+        max_keep_speed_kmh=FLIGHT_SPEED_THRESHOLD_KMH * 0.5,
+    )
+
+    flight_features, flight_point_obj_ids = detect_flights(
+        filtered_for_lines,
         speed_threshold_kmh=FLIGHT_SPEED_THRESHOLD_KMH,
         min_distance_km=FLIGHT_MIN_DISTANCE_KM,
         min_duration_min=FLIGHT_MIN_DURATION_MIN,
@@ -594,6 +645,22 @@ def main() -> None:
     )
     write_geojson(flights_geojson_path, flight_features)
     print(f"Wrote flights GeoJSON to {flights_geojson_path} ({len(flight_features)} segments)")
+
+    filtered_for_tracks = [
+        pt for pt in filtered_for_lines if id(pt) not in flight_point_obj_ids
+    ]
+
+    line_features = build_track_segments(filtered_for_tracks, args.gap_hours)
+    write_geojson(lines_geojson_path, line_features)
+    print(f"Wrote line GeoJSON to {lines_geojson_path} ({len(line_features)} segments)")
+
+    tag_tracks = build_grouped_tracks(filtered_for_tracks, "tag", args.gap_hours)
+    write_geojson(track_tags_geojson_path, tag_tracks)
+    print(f"Wrote tag tracks GeoJSON to {track_tags_geojson_path} ({len(tag_tracks)} segments)")
+
+    topic_tracks = build_grouped_tracks(filtered_for_tracks, "topic", args.gap_hours)
+    write_geojson(track_topics_geojson_path, topic_tracks)
+    print(f"Wrote topic tracks GeoJSON to {track_topics_geojson_path} ({len(topic_tracks)} segments)")
 
     tippecanoe_bin = ensure_tippecanoe(args.tippecanoe_bin)
     print("Running tippecanoe to generate PMTiles...")

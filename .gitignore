@@ -188,3 +188,6 @@ backups/
 .specify/
 *.pmtiles
 *.pyc
+.venv/
+.uv-cache/
+experiments/pmtiles/output/
