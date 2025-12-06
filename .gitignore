@@ -181,3 +181,10 @@ secrets.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+*.dump
+backups/
+
+.codex/
+.specify/
+*.pmtiles
+*.pyc
