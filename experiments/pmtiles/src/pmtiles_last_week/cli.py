@@ -136,7 +136,12 @@ def fetch_locations(
     """
     with psycopg.connect(dsn, row_factory=dict_row) as conn:
         with conn.cursor() as cur:
-            cur.execute(query, {"cutoff": since_epoch})
+            if since_epoch > 0:
+                cur.execute(query, {"cutoff": since_epoch})
+            else:
+                # Remove the tst clause or pass 0
+                query_all = query.replace("where tst >= %(cutoff)s", "where 1=1")
+                cur.execute(query_all, {"cutoff": 0})
             rows = cur.fetchall()
             return rows
 
@@ -212,12 +217,46 @@ def features_from_rows(rows: Iterable[Dict[str, object]]) -> List[Dict[str, obje
 def build_track_segments(
     point_features: Sequence[Dict[str, object]],
     max_gap_hours: float,
+    forbidden_intervals: List[Tuple[int, int]] | None = None,
 ) -> List[Dict[str, object]]:
-    # Build line segments ordered by timestamp, splitting at time gaps to avoid long jumps.
+    # Build line segments ordered by timestamp.
+    # Split if gap > max_gap_hours OR gap overlaps a forbidden interval (flight).
+    if not point_features:
+        return []
+
+    # Sort just in case
+    # Assuming point_features are already sorted or we sort here (safer)
+    pts = sorted(point_features, key=lambda f: f["properties"].get("tst") or 0)
+    
     segments: List[List[Dict[str, object]]] = []
     current: List[Dict[str, object]] = []
 
-    for feat in point_features:
+    # Optimize forbidden checks
+    sorted_forbidden = sorted(forbidden_intervals) if forbidden_intervals else []
+    
+    def is_forbidden(t1: int, t2: int) -> bool:
+        # Check if [t1, t2] overlaps significantly with any forbidden interval
+        # Actually, if there is a flight [fs, fe], and t1 < fs and t2 > fe, then we bridged it.
+        # We want to split if we bridge a flight.
+        # So if any flight is contained within (t1, t2), we split.
+        if not sorted_forbidden:
+            return False
+            
+        # Binary search or simple iteration (flights are few)
+        # We want to find a flight where flight_end > t1 and flight_start < t2
+        # But specifically, we are concerned about bridging: t1 <= flight_start AND t2 >= flight_end
+        # The gap completely contains the flight.
+        
+        for fs, fe in sorted_forbidden:
+            if fs >= t1 and fe <= t2:
+                # Only if the overlap is real (flight duration > 0)
+                if fe > fs:
+                    return True
+            if fs > t2:
+                break
+        return False
+
+    for feat in pts:
         ts = feat["properties"].get("tst")
         if ts is None:
             continue
@@ -232,7 +271,14 @@ def build_track_segments(
             continue
 
         gap_hours = (ts - prev_ts) / 3600.0
+        
+        should_split = False
         if gap_hours > max_gap_hours:
+            should_split = True
+        elif is_forbidden(prev_ts, ts):
+            should_split = True
+
+        if should_split:
             segments.append(current)
             current = [feat]
         else:
@@ -258,6 +304,8 @@ def build_track_segments(
                     "start_ts": start_ts,
                     "end_ts": end_ts,
                     "count": len(seg),
+                    # Inherit tag from first point?
+                    "tag": seg[0]["properties"].get("tag"),
                 },
             }
         )
@@ -348,12 +396,11 @@ def detect_flights(
     min_distance_km: float,
     min_duration_min: float,
     max_gap_hours: float,
-) -> Tuple[List[Dict[str, object]], set[int]]:
+) -> List[Dict[str, object]]:
     # Simple heuristic: consecutive points with speed above threshold form a flight segment.
     pts = sorted(point_features, key=lambda f: f["properties"].get("tst") or 0)
     flights: List[List[Dict[str, object]]] = []
     current: List[Dict[str, object]] = []
-    flight_point_obj_ids: set[int] = set()
 
     for i in range(1, len(pts)):
         p1 = pts[i - 1]
@@ -377,9 +424,11 @@ def detect_flights(
         if is_flight:
             if not current:
                 current.append(p1)
-                flight_point_obj_ids.add(id(p1))
             current.append(p2)
-            flight_point_obj_ids.add(id(p2))
+            current.append(p2)
+            # Mark points as flight for later exclusion
+            p1["_is_flight"] = True
+            p2["_is_flight"] = True
         else:
             if current:
                 flights.append(current)
@@ -427,7 +476,10 @@ def detect_flights(
             }
         )
 
-    return flight_features, flight_point_obj_ids
+    return flight_features
+
+    # Removed flight_point_obj_ids return since we mark in-place now
+
 
 
 def write_geojson(path: Path, features: List[Dict[str, object]]) -> None:
@@ -464,45 +516,10 @@ def build_pmtiles(
     includes = [
         "id",
         "tst",
-        "created_at",
         "tag",
-        "tid",
         "topic",
-        "_type",
-        "conn",
         "vel",
-        "acc",
         "alt",
-        "vac",
-        "p",
-        "cog",
-        "rad",
-        "batt",
-        "bs",
-        "w",
-        "o",
-        "m",
-        "ssid",
-        "bssid",
-        "inregions",
-        "inrids",
-        "desc",
-        "uuid",
-        "major",
-        "minor",
-        "event",
-        "wtst",
-        "poi",
-        "r",
-        "u",
-        "t",
-        "c",
-        "b",
-        "steps",
-        "from_epoch",
-        "to_epoch",
-        "request",
-        "insert_time",
         "start_ts",
         "end_ts",
         "count",
@@ -580,6 +597,11 @@ def parse_args() -> argparse.Namespace:
         help="Split lines when the time gap between points exceeds this many hours (default: 3).",
     )
     parser.add_argument(
+        "--all-time",
+        action="store_true",
+        help="Fetch all locations regardless of time.",
+    )
+    parser.add_argument(
         "--flight-gap-hours",
         type=float,
         default=FLIGHT_MAX_GAP_HOURS,
@@ -603,7 +625,11 @@ def main() -> None:
     args = parse_args()
     supabase_url, db_password, pooler_host = load_config(args)
     project_ref = parse_project_ref(supabase_url)
-    cutoff = int((datetime.now(timezone.utc) - timedelta(days=args.days)).timestamp())
+    
+    if args.all_time:
+        cutoff = 0
+    else:
+        cutoff = int((datetime.now(timezone.utc) - timedelta(days=args.days)).timestamp())
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -636,7 +662,7 @@ def main() -> None:
         max_keep_speed_kmh=FLIGHT_SPEED_THRESHOLD_KMH * 0.5,
     )
 
-    flight_features, flight_point_obj_ids = detect_flights(
+    flight_features = detect_flights(
         filtered_for_lines,
         speed_threshold_kmh=FLIGHT_SPEED_THRESHOLD_KMH,
         min_distance_km=FLIGHT_MIN_DISTANCE_KM,
@@ -646,31 +672,62 @@ def main() -> None:
     write_geojson(flights_geojson_path, flight_features)
     print(f"Wrote flights GeoJSON to {flights_geojson_path} ({len(flight_features)} segments)")
 
+    # Build flight intervals for splitting
+    flight_intervals = []
+    for f in flight_features:
+        s = f["properties"].get("start_ts")
+        e = f["properties"].get("end_ts")
+        if s and e:
+            flight_intervals.append((s, e))
+
     filtered_for_tracks = [
-        pt for pt in filtered_for_lines if id(pt) not in flight_point_obj_ids
+        pt for pt in filtered_for_lines if not pt.get("_is_flight")
     ]
 
-    line_features = build_track_segments(filtered_for_tracks, args.gap_hours)
-    write_geojson(lines_geojson_path, line_features)
-    print(f"Wrote line GeoJSON to {lines_geojson_path} ({len(line_features)} segments)")
+    # Group by TOPIC (Trip name)
+    from collections import defaultdict
+    points_by_group = defaultdict(list)
+    for pt in filtered_for_tracks:
+        # Use topic as the primary grouper, fallback to tag, then 'unknown'
+        t = pt["properties"].get("topic") or pt["properties"].get("tag") or "unknown"
+        points_by_group[t].append(pt)
 
-    tag_tracks = build_grouped_tracks(filtered_for_tracks, "tag", args.gap_hours)
-    write_geojson(track_tags_geojson_path, tag_tracks)
-    print(f"Wrote tag tracks GeoJSON to {track_tags_geojson_path} ({len(tag_tracks)} segments)")
-
-    topic_tracks = build_grouped_tracks(filtered_for_tracks, "topic", args.gap_hours)
-    write_geojson(track_topics_geojson_path, topic_tracks)
-    print(f"Wrote topic tracks GeoJSON to {track_topics_geojson_path} ({len(topic_tracks)} segments)")
+    track_layers = []
+    
+    print(f"Building tracks for {len(points_by_group)} topics...")
+    
+    # Process each group
+    for group_name, pts in points_by_group.items():
+        # Sanitize name for filename
+        safe_name = "".join(x for x in group_name if x.isalnum() or x in "._- ")
+        if not safe_name: 
+            safe_name = "track" 
+            
+        # Lines logic
+        lines = build_track_segments(
+            pts, 
+            max_gap_hours=24*30, 
+            forbidden_intervals=flight_intervals
+        )
+        
+        if not lines:
+            continue
+            
+        layer_name = group_name 
+        path = geojson_dir / f"track_{safe_name}.geojson"
+        write_geojson(path, lines)
+        track_layers.append((layer_name, path))
 
     tippecanoe_bin = ensure_tippecanoe(args.tippecanoe_bin)
     print("Running tippecanoe to generate PMTiles...")
+    
     layers = [
         ("locations", points_geojson_path),
-        ("track", lines_geojson_path),
-        ("track_tags", track_tags_geojson_path),
-        ("track_topics", track_topics_geojson_path),
         ("flights", flights_geojson_path),
     ]
+    # Add track layers
+    layers.extend(track_layers)
+    
     build_pmtiles(
         tippecanoe_bin,
         layers=layers,
@@ -682,12 +739,11 @@ def main() -> None:
     if not args.keep_geojson:
         if points_geojson_path.exists():
             points_geojson_path.unlink()
-        if lines_geojson_path.exists():
-            lines_geojson_path.unlink()
-        if track_tags_geojson_path.exists():
-            track_tags_geojson_path.unlink()
-        if track_topics_geojson_path.exists():
-            track_topics_geojson_path.unlink()
+        if flights_geojson_path.exists():
+            flights_geojson_path.unlink()
+        for _, path in track_layers:
+            if path.exists():
+                path.unlink()
         if flights_geojson_path.exists():
             flights_geojson_path.unlink()
         print("Cleaned up intermediate GeoJSON.")
