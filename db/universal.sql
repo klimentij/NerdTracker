@@ -1,3 +1,5 @@
+CREATE EXTENSION earthdistance CASCADE;
+
 -- Create the table
 create table if not exists locations (
   id serial primary key,  -- Unique identifier for each entry
@@ -46,6 +48,9 @@ create table if not exists locations (
   "request" varchar       -- Request type (e.g., "tour")
 );
 
+-- Add indexes
+create index if not exists idx_locations_tid on locations(tid, tst);
+
 -- Enable RLS
 alter table locations enable row level security;
 
@@ -58,3 +63,107 @@ on "public"."locations"
 for insert
 to anon
 with check (true);
+
+-- Automatically detect if reporter stays in 1 place
+CREATE VIEW locations_no_dups AS
+SELECT *
+FROM locations;
+
+GRANT INSERT ON locations_no_dups TO anon;
+
+CREATE OR REPLACE FUNCTION locations_no_dups_insert_trigger()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER  -- run with owner's privileges
+AS $$
+DECLARE
+    RECENT_LOCATIONS_LIMIT CONSTANT INT := 10;
+    MAX_PROXIMITY_METERS CONSTANT INT := 100;
+    MIN_WITHIN_RANGE CONSTANT INT := 5;
+
+    rec locations;
+    most_recent_rec locations;
+    result locations;
+    within_range_cnt INT := 0;
+    is_recent_location_in_range BOOLEAN := FALSE;
+
+    is_close BOOLEAN;
+BEGIN
+    -- Select the last LAST_LOCATIONS_COUNT locations from the locations table
+    -- Filter out NULL lat/lon records
+    FOR rec IN
+        SELECT *
+        FROM locations loc
+        WHERE loc.lat IS NOT NULL
+            AND loc.lon IS NOT NULL
+            AND loc.tst IS NOT NULL
+            AND loc.tid = NEW.tid -- Original code doesn't check if recent points belong to the same device
+        ORDER BY tst DESC
+        LIMIT RECENT_LOCATIONS_LIMIT
+    LOOP
+        is_close := earth_distance(
+            ll_to_earth(NEW.lat, NEW.lon),
+            ll_to_earth(rec.lat, rec.lon)
+        ) < MAX_PROXIMITY_METERS;
+
+        -- Count all recent records that are within proximity
+        IF is_close
+        THEN
+            within_range_cnt := within_range_cnt + 1;
+        END IF;
+
+        -- For the first (most recent) record only: record if it's within range
+        IF most_recent_rec IS NULL
+        THEN
+            is_recent_location_in_range := is_close;
+            most_recent_rec := rec;
+        END IF;
+    END LOOP;
+
+    -- Check if we should update or insert
+    -- 1. The most recent location must be valid (non-null lat/lon)
+    -- 2. The most recent location must be within range
+    -- 3. At least MIN_WITHIN_RANGE locations must be within the hangout distance
+    IF is_recent_location_in_range AND (within_range_cnt >= MIN_WITHIN_RANGE)
+    THEN
+        NEW.id := most_recent_rec.id;
+
+        DELETE FROM locations
+        WHERE id = most_recent_rec.id;
+
+        INSERT INTO locations
+        SELECT NEW.*
+        RETURNING * INTO result;
+    ELSE
+        NEW.id := nextval('locations_id_seq');
+
+        INSERT INTO locations
+        SELECT NEW.*
+        RETURNING * INTO result;
+    END IF;
+    RETURN result;
+END;
+$$;
+
+CREATE TRIGGER trg_locations_no_dups_insert_trigger
+INSTEAD OF INSERT ON locations_no_dups
+FOR EACH ROW
+EXECUTE FUNCTION locations_no_dups_insert_trigger();
+
+
+CREATE OR REPLACE FUNCTION insert_or_update_location_json(new_loc_json json)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER  -- run with owner's privileges
+AS $$
+DECLARE
+    new_loc locations;
+BEGIN
+    -- Populate the record from JSON
+    SELECT * INTO new_loc
+    FROM json_populate_record(NULL::locations, new_loc_json);
+
+    INSERT INTO locations_no_dups
+    SELECT new_loc.*;
+END;
+$$;
