@@ -7,11 +7,15 @@
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest",
+    "test:node": "vitest --config vitest.node.config.mts run",
     "cf-typegen": "wrangler types"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.4.5",
     "@cloudflare/workers-types": "^4.20240722.0",
+    "@types/pg": "^8.15.5",
+    "pg": "^8.15.5",
+    "testcontainers": "^11.5.1",
     "typescript": "^5.5.2",
     "vitest": "1.5.0",
     "wrangler": "^3.60.3"
