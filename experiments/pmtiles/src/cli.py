@@ -221,6 +221,7 @@ def build_track_segments(
     max_gap_hours: float,
     forbidden_intervals: List[Tuple[int, int]] | None = None,
     epsilon_km: float = 0.1,
+    coord_precision: int | None = COORD_PRECISION,
 ) -> List[Dict[str, object]]:
     # Build line segments ordered by timestamp.
     # Split if gap > max_gap_hours OR gap overlaps a forbidden interval (flight).
@@ -297,13 +298,14 @@ def build_track_segments(
 
         # Extract and round coordinates
         coords = [
-            [round_coord(pt["geometry"]["coordinates"][0]), 
-             round_coord(pt["geometry"]["coordinates"][1])]
+            [round_coord(pt["geometry"]["coordinates"][0], precision=coord_precision), 
+             round_coord(pt["geometry"]["coordinates"][1], precision=coord_precision)]
             for pt in seg
         ]
         
-        # Apply RDP simplification
-        coords = simplify_line_rdp(coords, epsilon_km=epsilon_km)
+        # Apply RDP simplification (skip if epsilon is 0 or None)
+        if epsilon_km and epsilon_km > 0:
+            coords = simplify_line_rdp(coords, epsilon_km=epsilon_km)
         
         if len(coords) < 2:
             continue
@@ -401,8 +403,10 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return r * c
 
 
-def round_coord(val: float, precision: int = COORD_PRECISION) -> float:
-    """Round coordinate to save space. 5 decimals = ~1m precision."""
+def round_coord(val: float, precision: int | None = COORD_PRECISION) -> float:
+    """Round coordinate to save space. 5 decimals = ~1m precision. None = no rounding."""
+    if precision is None:
+        return val
     return round(val, precision)
 
 
@@ -469,6 +473,8 @@ def detect_flights(
     min_distance_km: float,
     min_duration_min: float,
     max_gap_hours: float,
+    coord_precision: int | None = COORD_PRECISION,
+    epsilon_km: float = 1.0,
 ) -> List[Dict[str, object]]:
     # Simple heuristic: consecutive points with speed above threshold form a flight segment.
     pts = sorted(point_features, key=lambda f: f["properties"].get("tst") or 0)
@@ -532,11 +538,12 @@ def detect_flights(
 
         # Round coordinates and simplify flight paths
         coords = [
-            [round_coord(pt["geometry"]["coordinates"][0]),
-             round_coord(pt["geometry"]["coordinates"][1])]
+            [round_coord(pt["geometry"]["coordinates"][0], precision=coord_precision),
+             round_coord(pt["geometry"]["coordinates"][1], precision=coord_precision)]
             for pt in seg
         ]
-        coords = simplify_line_rdp(coords, epsilon_km=1.0)  # 1km tolerance for flights
+        if epsilon_km and epsilon_km > 0:
+            coords = simplify_line_rdp(coords, epsilon_km=epsilon_km)
         
         if len(coords) < 2:
             continue
@@ -582,7 +589,21 @@ def build_pmtiles(
     layers: Sequence[Tuple[str, Path]],
     pmtiles_path: Path,
     max_zoom: int,
+    full_metadata: bool = False,
+    preserve_detail: bool = False,
 ) -> None:
+    """
+    Build PMTiles archive from GeoJSON layers.
+    
+    PMTiles supports static hosting with HTTP Range requests - clients only download
+    the tiles they need. Even large files (50-100MB) work efficiently because:
+    - Only tiles for the current viewport/zoom are fetched
+    - Initial load is fast (just index/metadata)
+    - Can be served from CDN, S3, R2, GitHub Pages, etc.
+    - No server required - completely serverless
+    
+    Use --full-metadata --high-precision --preserve-detail for maximum detail.
+    """
     args = [
         tippecanoe_bin,
         "-o",
@@ -590,20 +611,42 @@ def build_pmtiles(
         "--force",
         "--minimum-zoom=0",
         f"--maximum-zoom={max_zoom}",
-        # Aggressive size optimization
-        "--drop-densest-as-needed",
-        "--coalesce-densest-as-needed",
-        "--simplify-only-low-zooms",
         "--no-tile-compression",  # PMTiles handles compression
     ]
 
-    # Minimal metadata - only what we actually use
-    includes = [
-        "start_ts",
-        "end_ts",
-        "dist_km",
-        "duration_min",
-    ]
+    # Size optimization options - only if not preserving detail
+    if not preserve_detail:
+        args.extend([
+            "--drop-densest-as-needed",
+            "--coalesce-densest-as-needed",
+            "--simplify-only-low-zooms",
+        ])
+    else:
+        # Even with preserve_detail, we need to allow larger tiles for full metadata
+        # Remove tile size limit entirely for maximum detail mode
+        # PMTiles will still work efficiently - clients only download visible tiles
+        args.append("--no-tile-size-limit")
+
+    # Metadata inclusion
+    if full_metadata:
+        # Include all metadata fields that might be in features
+        includes = [
+            "id", "tst", "created_at", "tag", "tid", "topic", "_type", "conn",
+            "vel", "acc", "alt", "vac", "p", "cog", "rad", "batt", "bs",
+            "w", "o", "m", "ssid", "bssid", "inregions", "inrids", "desc",
+            "uuid", "major", "minor", "event", "wtst", "poi", "r", "u", "t",
+            "c", "b", "steps", "from_epoch", "to_epoch", "request", "insert_time",
+            "start_ts", "end_ts", "dist_km", "duration_min",
+        ]
+    else:
+        # Minimal metadata - only what we actually use
+        includes = [
+            "start_ts",
+            "end_ts",
+            "dist_km",
+            "duration_min",
+        ]
+    
     for inc in includes:
         args.append(f"--include={inc}")
 
@@ -712,6 +755,26 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Include raw locations layer (significantly increases file size).",
     )
+    parser.add_argument(
+        "--full-metadata",
+        action="store_true",
+        help="Include all metadata fields in tiles (default: minimal metadata only).",
+    )
+    parser.add_argument(
+        "--high-precision",
+        action="store_true",
+        help="Use full coordinate precision (default: 5 decimals ~1m). Disables coordinate rounding.",
+    )
+    parser.add_argument(
+        "--preserve-detail",
+        action="store_true",
+        help="Disable aggressive simplification/dropping. Keeps all points and detail (larger file, but PMTiles only loads what's needed).",
+    )
+    parser.add_argument(
+        "--no-simplify",
+        action="store_true",
+        help="Disable line simplification (use with --preserve-detail for maximum precision).",
+    )
     return parser.parse_args()
 
 
@@ -763,6 +826,18 @@ def main() -> None:
         write_geojson(raw_cache_path, features)
         print(f"Cached raw data to {raw_cache_path}")
 
+    # Determine precision and simplification settings
+    coord_precision = None if args.high_precision else COORD_PRECISION
+    simplify_epsilon = 0.0 if args.no_simplify else args.simplify_km
+    flight_simplify_epsilon = 0.0 if args.no_simplify else 1.0  # 1km default for flights
+    
+    if args.high_precision:
+        print("Using full coordinate precision (no rounding)")
+    if args.no_simplify:
+        print("Line simplification disabled")
+    if args.preserve_detail:
+        print("Preserving all detail (no aggressive dropping/simplification)")
+
     # Filter outliers
     filtered_for_lines = filter_isolated_points(
         features,
@@ -777,6 +852,8 @@ def main() -> None:
         min_distance_km=FLIGHT_MIN_DISTANCE_KM,
         min_duration_min=FLIGHT_MIN_DURATION_MIN,
         max_gap_hours=args.flight_gap_hours,
+        coord_precision=coord_precision,
+        epsilon_km=flight_simplify_epsilon,
     )
     write_geojson(flights_geojson_path, flight_features)
     print(f"Wrote flights GeoJSON ({len(flight_features)} segments)")
@@ -815,7 +892,8 @@ def main() -> None:
             pts, 
             max_gap_hours=24*30, 
             forbidden_intervals=flight_intervals,
-            epsilon_km=args.simplify_km,
+            epsilon_km=simplify_epsilon,
+            coord_precision=coord_precision,
         )
         
         if not lines:
@@ -843,23 +921,26 @@ def main() -> None:
     
     # Optionally include locations layer (significantly increases size)
     if args.include_locations:
-        # Write minimal points for locations layer
-        minimal_points = []
+        # Write points for locations layer (full metadata if requested)
+        location_points = []
         for f in features:
-            minimal_points.append({
+            coords = f["geometry"]["coordinates"]
+            props = {"tst": f["properties"].get("tst")}
+            if args.full_metadata:
+                # Include all properties
+                props = f["properties"].copy()
+            location_points.append({
                 "type": "Feature",
                 "geometry": {
                     "type": "Point",
                     "coordinates": [
-                        round_coord(f["geometry"]["coordinates"][0]),
-                        round_coord(f["geometry"]["coordinates"][1]),
+                        round_coord(coords[0], precision=coord_precision),
+                        round_coord(coords[1], precision=coord_precision),
                     ]
                 },
-                "properties": {
-                    "tst": f["properties"].get("tst"),
-                }
+                "properties": props,
             })
-        write_geojson(points_geojson_path, minimal_points)
+        write_geojson(points_geojson_path, location_points)
         layers.insert(0, ("locations", points_geojson_path))
         print("Including locations layer (--include-locations)")
     
@@ -868,6 +949,8 @@ def main() -> None:
         layers=layers,
         pmtiles_path=pmtiles_path,
         max_zoom=args.max_zoom,
+        full_metadata=args.full_metadata,
+        preserve_detail=args.preserve_detail,
     )
     
     # Report file size

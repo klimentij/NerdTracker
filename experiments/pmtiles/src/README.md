@@ -59,6 +59,10 @@ Achieved via:
 | `--gap-hours` | 3 | Split tracks when time gap exceeds this |
 | `--flight-gap-hours` | 12 | Max gap for flight detection |
 | `--outlier-km` | 50 | Remove isolated slow points beyond this distance |
+| `--full-metadata` | off | Include all metadata fields (default: minimal) |
+| `--high-precision` | off | Use full coordinate precision, disable rounding |
+| `--preserve-detail` | off | Disable aggressive simplification/dropping |
+| `--no-simplify` | off | Disable line simplification entirely |
 
 ## Tuning File Size
 
@@ -68,7 +72,27 @@ uv run python cli.py ... --simplify-km 0.5 --max-zoom 8
 
 # Larger but sharper (~2MB): less simplification
 uv run python cli.py ... --simplify-km 0.05 --max-zoom 12
+
+# Full detail with all metadata (~50-100MB): PMTiles only loads what's needed!
+uv run python cli.py ... --all-time --full-metadata --high-precision --preserve-detail --no-simplify --include-locations --max-zoom 14
 ```
+
+## Static Serving with PMTiles
+
+**PMTiles is designed for static hosting!** Even large files (50-100MB) work efficiently because:
+
+1. **Range Requests**: Clients only download the specific tiles they need (HTTP Range requests)
+2. **CDN-Friendly**: Can be served from Cloudflare R2, S3, GitHub Pages, or any static host
+3. **Spatial Indexing**: Efficient spatial index means only relevant tiles are fetched
+4. **No Server Required**: Completely serverless - just a static file
+
+When you use `--full-metadata --high-precision --preserve-detail`, the file will be larger, but:
+- Clients only download tiles for the current viewport/zoom level
+- Initial load is still fast (just the index/metadata)
+- Full detail available when zooming in
+- Perfect for serving 500k+ locations with all metadata
+
+**Example**: A 100MB PMTiles file might only transfer 2-5MB for a typical map view, because only visible tiles are downloaded.
 
 ## Caching
 
