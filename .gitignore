@@ -181,3 +181,13 @@ secrets.json
 .Trashes
 ehthumbs.db
 Thumbs.db
+*.dump
+backups/
+
+.codex/
+.specify/
+*.pmtiles
+*.pyc
+.venv/
+.uv-cache/
+experiments/pmtiles/output/
